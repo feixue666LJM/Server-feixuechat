@@ -18,6 +18,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.DataLine;
@@ -74,9 +75,12 @@ public class ChatServer extends JFrame {
     // 服务器端加入频道时也使用短队列，和客户端帧走同一混音节奏
     private Map<String, BlockingQueue<byte[]>> serverVoiceAudioQueues = new ConcurrentHashMap<>();
     private Map<String, Boolean> voiceChannelEnabled = new ConcurrentHashMap<>();
+    // 每个频道独立的实时语音音量倍率，默认保持原声 x1。
+    private Map<String, Integer> voiceChannelVolumeGain = new ConcurrentHashMap<>();
     private JPanel voiceChannelsPanel;
     private JLabel voiceOverviewLabel;
     private final Map<String, VoiceChannelRow> voiceChannelRows = new LinkedHashMap<>();
+    private final AtomicBoolean voiceChannelRefreshPending = new AtomicBoolean(false);
     private final Object serverVoiceLock = new Object();
     private volatile String serverVoiceGroup;
     private volatile boolean serverVoiceStarting;
@@ -146,6 +150,8 @@ public class ChatServer extends JFrame {
     private static final int GROUP_AUDIO_INPUT_QUEUE_CAPACITY = 10;
     private static final int GROUP_AUDIO_TARGET_BUFFER_FRAMES = 6;
     private static final int GROUP_AUDIO_MAX_PLAYBACK_FRAMES = 15;
+    private static final int MIN_VOICE_VOLUME_GAIN = 1;
+    private static final int MAX_VOICE_VOLUME_GAIN = 6;
 
     // 允许连接服务器的最低客户端版本号
     private static final String MIN_CLIENT_VERSION = "3.0.0";
@@ -471,6 +477,7 @@ public class ChatServer extends JFrame {
         private final JLabel statusLabel;
         private final JToggleButton enabledButton;
         private final JButton joinButton;
+        private final JComboBox<String> volumeBox;
 
         private VoiceChannelRow(String group) {
             panel = new JPanel(new BorderLayout(8, 0));
@@ -482,7 +489,11 @@ public class ChatServer extends JFrame {
             info.add(statusLabel);
             enabledButton = new JToggleButton("开启");
             joinButton = new JButton("服务器加入");
+            volumeBox = new JComboBox<>(new String[]{"x1", "x2", "x3", "x4", "x5", "x6"});
+            volumeBox.setToolTipText("设置该频道实时语音的播放音量倍率");
             JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+            actions.add(new JLabel("音量"));
+            actions.add(volumeBox);
             actions.add(enabledButton);
             actions.add(joinButton);
             panel.add(info, BorderLayout.CENTER);
@@ -504,10 +515,15 @@ public class ChatServer extends JFrame {
         if (voiceChannelsPanel == null) {
             return;
         }
+        if (!voiceChannelRefreshPending.compareAndSet(false, true)) {
+            return;
+        }
         SwingUtilities.invokeLater(() -> {
+            voiceChannelRefreshPending.set(false);
             Set<String> channels = knownVoiceChannels();
             for (String group : channels) {
                 voiceChannelEnabled.putIfAbsent(group, true);
+                voiceChannelVolumeGain.putIfAbsent(group, MIN_VOICE_VOLUME_GAIN);
                 VoiceChannelRow row = voiceChannelRows.get(group);
                 if (row == null) {
                     row = new VoiceChannelRow(group);
@@ -515,10 +531,13 @@ public class ChatServer extends JFrame {
                     VoiceChannelRow finalRow = row;
                     row.enabledButton.addActionListener(e ->
                             setVoiceChannelEnabled(group, finalRow.enabledButton.isSelected()));
+                    row.volumeBox.addActionListener(e ->
+                            setVoiceChannelVolumeGain(group, finalRow.volumeBox.getSelectedIndex() + 1));
                     row.joinButton.addActionListener(e -> toggleServerVoiceChannel(group));
+                    voiceChannelsPanel.add(row.panel);
                 }
-                voiceChannelsPanel.add(row.panel);
                 boolean enabled = voiceChannelEnabled.getOrDefault(group, true);
+                int volumeGain = voiceChannelVolumeGain.getOrDefault(group, MIN_VOICE_VOLUME_GAIN);
                 boolean serverJoined = group.equals(serverVoiceGroup);
                 Set<ClientHandler> members = voiceRooms.get(group);
                 int memberCount = members == null ? 0 : members.size();
@@ -528,8 +547,10 @@ public class ChatServer extends JFrame {
                 boolean running = serverSocket != null && !serverSocket.isClosed() && isRunning;
                 row.enabledButton.setSelected(enabled);
                 row.enabledButton.setText(enabled ? "关闭" : "开启");
+                row.volumeBox.setSelectedIndex(volumeGain - 1);
                 row.statusLabel.setText((enabled ? "已开启" : "已关闭") + " | "
                         + (running ? "运行中" : "未启动") + " | 成员 " + memberCount
+                        + " | 音量 x" + volumeGain
                         + (serverJoined ? " | 服务器已加入" : ""));
                 row.joinButton.setText(serverJoined ? "服务器退出" : "服务器加入");
                 row.joinButton.setEnabled(running && enabled || serverJoined);
@@ -559,6 +580,16 @@ public class ChatServer extends JFrame {
             }
         }
         refreshVoiceChannelPanel();
+    }
+
+    private void setVoiceChannelVolumeGain(String group, int volumeGain) {
+        int clampedGain = Math.max(MIN_VOICE_VOLUME_GAIN,
+                Math.min(MAX_VOICE_VOLUME_GAIN, volumeGain));
+        Integer previousGain = voiceChannelVolumeGain.put(group, clampedGain);
+        if (previousGain == null || previousGain != clampedGain) {
+            log("语音频道音量已设置: " + group + " -> x" + clampedGain);
+            refreshVoiceChannelPanel();
+        }
     }
 
     private void toggleServerVoiceChannel(String group) {
@@ -2189,6 +2220,7 @@ public class ChatServer extends JFrame {
     private void mixVoiceRoomFrames() {
         for (Map.Entry<String, Set<ClientHandler>> roomEntry : voiceRooms.entrySet()) {
             String group = roomEntry.getKey();
+            int volumeGain = voiceChannelVolumeGain.getOrDefault(group, MIN_VOICE_VOLUME_GAIN);
             Set<ClientHandler> members = roomEntry.getValue();
             if (members == null || members.isEmpty()) {
                 continue;
@@ -2215,7 +2247,7 @@ public class ChatServer extends JFrame {
             if (frames.isEmpty() && serverFrame == null) {
                 continue;
             }
-            byte[] roomMix = mixPcmFrames(frames, null, serverFrame);
+            byte[] roomMix = mixPcmFrames(frames, null, serverFrame, volumeGain);
             String roomMixMessage = roomMix == null ? null : "/live_group_audio|混音|"
                     + Base64.getEncoder().encodeToString(roomMix);
             for (ClientHandler receiver : members) {
@@ -2226,14 +2258,14 @@ public class ChatServer extends JFrame {
                     }
                     continue;
                 }
-                byte[] mixWithoutSelf = mixPcmFrames(frames, receiver, serverFrame);
+                byte[] mixWithoutSelf = mixPcmFrames(frames, receiver, serverFrame, volumeGain);
                 if (mixWithoutSelf != null) {
                     receiver.sendMessage("/live_group_audio|混音|"
                             + Base64.getEncoder().encodeToString(mixWithoutSelf));
                 }
             }
             if (group.equals(serverVoiceGroup)) {
-                byte[] serverPlayback = mixPcmFrames(frames, null, null);
+                byte[] serverPlayback = mixPcmFrames(frames, null, null, volumeGain);
                 if (serverPlayback != null) {
                     offerAudioFrame(serverVoicePlaybackQueue, serverPlayback, GROUP_AUDIO_MAX_PLAYBACK_FRAMES);
                 }
@@ -2264,7 +2296,8 @@ public class ChatServer extends JFrame {
         }
     }
 
-    private byte[] mixPcmFrames(Map<ClientHandler, byte[]> frames, ClientHandler excludedSender, byte[] additionalFrame) {
+    private byte[] mixPcmFrames(Map<ClientHandler, byte[]> frames, ClientHandler excludedSender,
+                                byte[] additionalFrame, int volumeGain) {
         int[] sums = new int[LIVE_AUDIO_CHUNK_BYTES / 2];
         boolean hasAudio = false;
         for (Map.Entry<ClientHandler, byte[]> entry : frames.entrySet()) {
@@ -2296,8 +2329,12 @@ public class ChatServer extends JFrame {
             return null;
         }
         byte[] mixed = new byte[LIVE_AUDIO_CHUNK_BYTES];
+        int clampedGain = Math.max(MIN_VOICE_VOLUME_GAIN,
+                Math.min(MAX_VOICE_VOLUME_GAIN, volumeGain));
         for (int i = 0; i < sums.length; i++) {
-            int sample = Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, sums[i]));
+            long amplifiedSample = (long) sums[i] * clampedGain;
+            int sample = (int) Math.max(Short.MIN_VALUE,
+                    Math.min(Short.MAX_VALUE, amplifiedSample));
             mixed[i * 2] = (byte) (sample & 0xff);
             mixed[i * 2 + 1] = (byte) ((sample >>> 8) & 0xff);
         }
