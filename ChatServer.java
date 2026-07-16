@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.List;
@@ -19,6 +20,8 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.DataLine;
@@ -46,6 +49,15 @@ public class ChatServer extends JFrame {
     private JLabel onlineUsersSummaryLabel;
     private JButton privateChatButton;
     private JButton privateVoiceButton;
+    private DefaultListModel<String> channelManagementListModel;
+    private JList<String> channelManagementList;
+    private JTextField channelNameField;
+    private JPasswordField channelPasswordField;
+    private JCheckBox noChannelPasswordCheckBox;
+    private JButton addChannelButton;
+    private JButton deleteChannelButton;
+    private JButton changeChannelPasswordButton;
+    private JLabel channelManagementStatusLabel;
     private ServerSocket serverSocket; // 修改为普通ServerSocket类型，兼容SSL和普通连接
     // 存储每个群组的客户端列表
     private Map<String, List<ClientHandler>> groups = new ConcurrentHashMap<>();
@@ -109,31 +121,25 @@ public class ChatServer extends JFrame {
     // DeepSeek AI问答服务
     private DeepSeekService deepSeekService;
 
-    // 账户和密码映射
-    private static final Map<String, String> ACCOUNT_PASSWORDS = new HashMap<>();
-    private static final Map<String, String> ACCOUNT_GROUPS = new HashMap<>();
+    // 私有频道账号、密码和内部群组名均由 onlypd.json 动态加载。
+    private volatile Map<String, String> accountPasswords = Collections.emptyMap();
+    private volatile Map<String, String> accountGroups = Collections.emptyMap();
+    private volatile Set<String> configuredChannelGroups = Collections.emptySet();
+    private Path onlyPdConfigPath;
+    private long onlyPdLastModified = Long.MIN_VALUE;
+    private long onlyPdLastSize = Long.MIN_VALUE;
+    private java.util.concurrent.ScheduledExecutorService channelConfigMonitor;
+    private volatile boolean serverStarting;
     private static final String SERVER_P2P_NAME = "server";
     private static final String SERVER_P2P_PASSWORD = "00000";
     private static final String MUTED_USERS_FILE = "muted_users.txt";
-
-    static {
-        ACCOUNT_PASSWORDS.put("one", "passworld");
-        ACCOUNT_PASSWORDS.put("two", "passworld");
-        ACCOUNT_PASSWORDS.put("three", "passworld");
-        ACCOUNT_PASSWORDS.put("four", "passworld");
-        ACCOUNT_PASSWORDS.put("five", "passworld");
-        ACCOUNT_PASSWORDS.put("six", "passworld");
-
-        ACCOUNT_GROUPS.put("one", "group_one");
-        ACCOUNT_GROUPS.put("two", "group_two");
-        ACCOUNT_GROUPS.put("three", "group_three");
-        ACCOUNT_GROUPS.put("four", "group_four");
-        ACCOUNT_GROUPS.put("five", "group_five");
-        ACCOUNT_GROUPS.put("six", "group_six");
-        ACCOUNT_GROUPS.put("seven", "group_what");
-        ACCOUNT_GROUPS.put("public", "group_public");
-        ACCOUNT_GROUPS.put("公共", "group_public");
-    }
+    private static final String ONLY_PD_CONFIG_FILE = "onlypd.json";
+    private static final String PUBLIC_CHANNEL_DISPLAY = "公开频道（内置）";
+    private static final String EMPTY_ONLY_PD_CONFIG = "new{\nname@\npassworld@\n};\n";
+    private static final Pattern CHANNEL_BLOCK_PATTERN = Pattern.compile(
+            "(?is)new\\s*\\{(.*?)\\}\\s*;?");
+    private static final Pattern CHANNEL_FIELD_PATTERN = Pattern.compile(
+            "(?im)^\\s*(name|passworld|password)\\s*@\\s*(.*?)\\s*$");
 
     // 消息字节限制（降低为300）
     private static final int MAX_MESSAGE_BYTES = 300;
@@ -263,9 +269,10 @@ public class ChatServer extends JFrame {
     private volatile boolean isRunning = true; // 服务器运行状态
 
     public ChatServer() {
+        loadOnlyPdConfiguration(true);
         initUI();
         setTitle("聊天服务器");
-        setSize(600, 400);
+        setSize(760, 520);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         loadChatHistory(); // 启动时加载聊天记录
@@ -274,6 +281,179 @@ public class ChatServer extends JFrame {
         loadOnlineUsers(); // 启动时加载在线用户列表
         loadForbiddenWords(); // 启动时加载屏蔽词列表
         deepSeekService = new DeepSeekService(); // 初始化DeepSeek服务
+        startChannelConfigMonitor();
+    }
+
+    private void startChannelConfigMonitor() {
+        channelConfigMonitor = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "ChannelConfigMonitor");
+            thread.setDaemon(true);
+            return thread;
+        });
+        channelConfigMonitor.scheduleWithFixedDelay(
+                () -> loadOnlyPdConfiguration(false), 1500, 1500, TimeUnit.MILLISECONDS);
+    }
+
+    private synchronized void loadOnlyPdConfiguration(boolean force) {
+        try {
+            if (onlyPdConfigPath == null) {
+                onlyPdConfigPath = resolveConfigPath(ONLY_PD_CONFIG_FILE);
+            }
+            if (!Files.exists(onlyPdConfigPath)) {
+                Path parent = onlyPdConfigPath.getParent();
+                if (parent != null) {
+                    Files.createDirectories(parent);
+                }
+                Files.write(onlyPdConfigPath, EMPTY_ONLY_PD_CONFIG.getBytes(StandardCharsets.UTF_8));
+            }
+
+            long modified = Files.getLastModifiedTime(onlyPdConfigPath).toMillis();
+            long size = Files.size(onlyPdConfigPath);
+            if (!force && modified == onlyPdLastModified && size == onlyPdLastSize) {
+                return;
+            }
+
+            String content = new String(Files.readAllBytes(onlyPdConfigPath), StandardCharsets.UTF_8);
+            Map<String, String> newPasswords = new LinkedHashMap<>();
+            Map<String, String> newGroups = new LinkedHashMap<>();
+            Set<String> newConfiguredGroups = new LinkedHashSet<>();
+            Matcher blockMatcher = CHANNEL_BLOCK_PATTERN.matcher(content);
+            while (blockMatcher.find()) {
+                String name = null;
+                String password = null;
+                Matcher fieldMatcher = CHANNEL_FIELD_PATTERN.matcher(blockMatcher.group(1));
+                while (fieldMatcher.find()) {
+                    String key = fieldMatcher.group(1).toLowerCase(Locale.ROOT);
+                    String value = cleanConfigValue(fieldMatcher.group(2));
+                    if ("name".equals(key)) {
+                        name = value;
+                    } else {
+                        password = value;
+                    }
+                }
+                if (name == null || name.isEmpty() || password == null) {
+                    continue;
+                }
+                String group = channelGroupForName(name);
+                newPasswords.put(name, password);
+                newGroups.put(name, group);
+                if (name.toLowerCase(Locale.ROOT).endsWith("chat") && name.length() > 4) {
+                    newGroups.putIfAbsent(name.substring(0, name.length() - 4), group);
+                }
+                newConfiguredGroups.add(group);
+            }
+            newGroups.put("public", PUBLIC_CHANNEL_GROUP);
+            newGroups.put("公共", PUBLIC_CHANNEL_GROUP);
+
+            Set<String> removedGroups = new LinkedHashSet<>(configuredChannelGroups);
+            removedGroups.removeAll(newConfiguredGroups);
+            accountPasswords = Collections.unmodifiableMap(newPasswords);
+            accountGroups = Collections.unmodifiableMap(newGroups);
+            configuredChannelGroups = Collections.unmodifiableSet(newConfiguredGroups);
+            onlyPdLastModified = modified;
+            onlyPdLastSize = size;
+
+            for (String removedGroup : removedGroups) {
+                voiceChannelEnabled.put(removedGroup, false);
+                Set<ClientHandler> members = voiceRooms.get(removedGroup);
+                if (members != null) {
+                    for (ClientHandler member : new ArrayList<>(members)) {
+                        member.sendMessage("/live_group_disabled|" + removedGroup);
+                    }
+                }
+            }
+            if (serverVoiceGroup != null && removedGroups.contains(serverVoiceGroup)) {
+                stopServerVoiceSession();
+            }
+            if (logArea != null) {
+                log("频道配置已刷新: " + newConfiguredGroups.size() + " 个私有频道");
+                refreshOnlineUsersPanel();
+                refreshVoiceChannelPanel();
+                refreshChannelManagementPanel();
+            }
+        } catch (Exception e) {
+            if (logArea != null) {
+                log("读取 " + ONLY_PD_CONFIG_FILE + " 失败，继续使用上次配置: " + e.getMessage());
+            } else {
+                System.err.println("读取 " + ONLY_PD_CONFIG_FILE + " 失败: " + e.getMessage());
+            }
+        }
+    }
+
+    private Path resolveConfigPath(String fileName) {
+        Path workingPath = Paths.get(System.getProperty("user.dir"), fileName).toAbsolutePath().normalize();
+        if (Files.exists(workingPath)) {
+            return workingPath;
+        }
+        try {
+            Path codePath = Paths.get(ChatServer.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI()).toAbsolutePath().normalize();
+            Path codeDirectory = Files.isDirectory(codePath) ? codePath : codePath.getParent();
+            if (codeDirectory != null) {
+                Path besideCode = codeDirectory.resolve(fileName);
+                if (Files.exists(besideCode)) {
+                    return besideCode;
+                }
+                Path directoryName = codeDirectory.getFileName();
+                if (directoryName != null && "target".equalsIgnoreCase(directoryName.toString())
+                        && codeDirectory.getParent() != null) {
+                    return codeDirectory.getParent().resolve(fileName);
+                }
+            }
+        } catch (Exception ignored) {
+            // 回退到服务器启动目录。
+        }
+        return workingPath;
+    }
+
+    private String cleanConfigValue(String value) {
+        String cleaned = value == null ? "" : value.trim();
+        while (cleaned.endsWith(",") || cleaned.endsWith(";")) {
+            cleaned = cleaned.substring(0, cleaned.length() - 1).trim();
+        }
+        if (cleaned.length() >= 2
+                && ((cleaned.startsWith("'") && cleaned.endsWith("'"))
+                || (cleaned.startsWith("\"") && cleaned.endsWith("\"")))) {
+            cleaned = cleaned.substring(1, cleaned.length() - 1).trim();
+        }
+        return cleaned;
+    }
+
+    private String channelGroupForName(String name) {
+        String groupName = name.trim();
+        if (groupName.startsWith("group_")) {
+            return groupName;
+        }
+        if (groupName.toLowerCase(Locale.ROOT).endsWith("chat") && groupName.length() > 4) {
+            groupName = groupName.substring(0, groupName.length() - 4);
+        }
+        return "group_" + groupName;
+    }
+
+    private synchronized void saveOnlyPdConfiguration(Map<String, String> channels) throws IOException {
+        if (onlyPdConfigPath == null) {
+            onlyPdConfigPath = resolveConfigPath(ONLY_PD_CONFIG_FILE);
+        }
+        StringBuilder content = new StringBuilder();
+        for (Map.Entry<String, String> entry : channels.entrySet()) {
+            content.append("new{\n")
+                    .append("name@").append(entry.getKey()).append('\n')
+                    .append("passworld@").append(entry.getValue()).append('\n')
+                    .append("};\n");
+        }
+        Path parent = onlyPdConfigPath.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        Path temporary = onlyPdConfigPath.resolveSibling(onlyPdConfigPath.getFileName() + ".tmp");
+        Files.write(temporary, content.toString().getBytes(StandardCharsets.UTF_8));
+        try {
+            Files.move(temporary, onlyPdConfigPath, StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException e) {
+            Files.move(temporary, onlyPdConfigPath, StandardCopyOption.REPLACE_EXISTING);
+        }
+        loadOnlyPdConfiguration(true);
     }
 
     private void initUI() {
@@ -310,6 +490,7 @@ public class ChatServer extends JFrame {
         mainTabs.addTab("服务器日志", chatPanel);
         mainTabs.addTab("在线用户", createOnlineUsersPanel());
         mainTabs.addTab("语音频道", createVoiceChannelsPanel());
+        mainTabs.addTab("频道管理", createChannelManagementPanel());
         add(mainTabs, BorderLayout.CENTER);
 
         // 按钮事件
@@ -334,6 +515,248 @@ public class ChatServer extends JFrame {
                 handleServerInput();
             }
         });
+    }
+
+    private JPanel createChannelManagementPanel() {
+        JPanel panel = new JPanel(new BorderLayout(8, 8));
+        panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+
+        JPanel editor = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(4, 4, 4, 4);
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 0;
+        editor.add(new JLabel("频道："), gbc);
+        channelNameField = new JTextField(20);
+        gbc.gridx = 1;
+        gbc.weightx = 1;
+        editor.add(channelNameField, gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.weightx = 0;
+        editor.add(new JLabel("密码："), gbc);
+        channelPasswordField = new JPasswordField(20);
+        gbc.gridx = 1;
+        gbc.weightx = 1;
+        editor.add(channelPasswordField, gbc);
+
+        noChannelPasswordCheckBox = new JCheckBox("无密码");
+        noChannelPasswordCheckBox.addActionListener(e -> refreshChannelManagementState());
+        gbc.gridx = 1;
+        gbc.gridy = 2;
+        editor.add(noChannelPasswordCheckBox, gbc);
+
+        addChannelButton = new JButton("添加");
+        addChannelButton.addActionListener(e -> addConfiguredChannel());
+        gbc.gridx = 1;
+        gbc.gridy = 3;
+        gbc.weightx = 0;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.anchor = GridBagConstraints.EAST;
+        editor.add(addChannelButton, gbc);
+        panel.add(editor, BorderLayout.NORTH);
+
+        channelManagementListModel = new DefaultListModel<>();
+        channelManagementList = new JList<>(channelManagementListModel);
+        channelManagementList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        channelManagementList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                loadSelectedChannelIntoEditor();
+                refreshChannelManagementState();
+            }
+        });
+        panel.add(new JScrollPane(channelManagementList), BorderLayout.CENTER);
+
+        JPanel bottom = new JPanel(new BorderLayout());
+        channelManagementStatusLabel = new JLabel();
+        bottom.add(channelManagementStatusLabel, BorderLayout.WEST);
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        changeChannelPasswordButton = new JButton("修改密码");
+        deleteChannelButton = new JButton("删除频道");
+        changeChannelPasswordButton.addActionListener(e -> changeConfiguredChannelPassword());
+        deleteChannelButton.addActionListener(e -> deleteConfiguredChannel());
+        actions.add(changeChannelPasswordButton);
+        actions.add(deleteChannelButton);
+        bottom.add(actions, BorderLayout.EAST);
+        panel.add(bottom, BorderLayout.SOUTH);
+
+        refreshChannelManagementPanel();
+        return panel;
+    }
+
+    private void loadSelectedChannelIntoEditor() {
+        String selected = channelManagementList == null ? null : channelManagementList.getSelectedValue();
+        if (selected == null || PUBLIC_CHANNEL_DISPLAY.equals(selected)) {
+            return;
+        }
+        channelNameField.setText(selected);
+        channelPasswordField.setText("");
+        noChannelPasswordCheckBox.setSelected(accountPasswords.getOrDefault(selected, "").isEmpty());
+    }
+
+    private void refreshChannelManagementPanel() {
+        if (channelManagementListModel == null) {
+            return;
+        }
+        SwingUtilities.invokeLater(() -> {
+            String selected = channelManagementList.getSelectedValue();
+            channelManagementListModel.clear();
+            channelManagementListModel.addElement(PUBLIC_CHANNEL_DISPLAY);
+            for (String channel : accountPasswords.keySet()) {
+                channelManagementListModel.addElement(channel);
+            }
+            if (selected != null) {
+                channelManagementList.setSelectedValue(selected, true);
+            }
+            refreshChannelManagementState();
+        });
+    }
+
+    private void refreshChannelManagementState() {
+        if (addChannelButton == null) {
+            return;
+        }
+        boolean editable = isChannelManagementAllowed();
+        String selected = channelManagementList == null ? null : channelManagementList.getSelectedValue();
+        boolean privateChannelSelected = selected != null && !PUBLIC_CHANNEL_DISPLAY.equals(selected);
+        channelNameField.setEnabled(editable);
+        noChannelPasswordCheckBox.setEnabled(editable);
+        channelPasswordField.setEnabled(editable && !noChannelPasswordCheckBox.isSelected());
+        addChannelButton.setEnabled(editable);
+        deleteChannelButton.setEnabled(editable && privateChannelSelected);
+        changeChannelPasswordButton.setEnabled(editable && privateChannelSelected);
+        channelManagementStatusLabel.setText(editable
+                ? "服务器已关闭，可以管理频道"
+                : "服务器运行中，频道管理已锁定");
+    }
+
+    private boolean isChannelManagementAllowed() {
+        return !serverStarting && (serverSocket == null || serverSocket.isClosed());
+    }
+
+    private void addConfiguredChannel() {
+        if (!ensureChannelManagementAllowed()) {
+            return;
+        }
+        String name = channelNameField.getText().trim();
+        String password = noChannelPasswordCheckBox.isSelected()
+                ? "" : new String(channelPasswordField.getPassword());
+        String validationError = validateChannelInput(name, password, noChannelPasswordCheckBox.isSelected());
+        if (validationError != null) {
+            JOptionPane.showMessageDialog(this, validationError, "无法添加频道", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        Map<String, String> updated = new LinkedHashMap<>(accountPasswords);
+        if (updated.containsKey(name)) {
+            JOptionPane.showMessageDialog(this, "频道已经存在", "无法添加频道", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        String newGroup = channelGroupForName(name);
+        for (String existingName : updated.keySet()) {
+            if (channelGroupForName(existingName).equals(newGroup)) {
+                JOptionPane.showMessageDialog(this, "频道内部名称与 " + existingName + " 冲突",
+                        "无法添加频道", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+        }
+        updated.put(name, password);
+        if (writeChannelConfiguration(updated, "频道已添加: " + name)) {
+            channelNameField.setText("");
+            channelPasswordField.setText("");
+            noChannelPasswordCheckBox.setSelected(false);
+        }
+    }
+
+    private void deleteConfiguredChannel() {
+        if (!ensureChannelManagementAllowed()) {
+            return;
+        }
+        String selected = channelManagementList.getSelectedValue();
+        if (selected == null || PUBLIC_CHANNEL_DISPLAY.equals(selected)) {
+            return;
+        }
+        int result = JOptionPane.showConfirmDialog(this, "确定删除频道 " + selected + " 吗？",
+                "删除频道", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (result != JOptionPane.YES_OPTION) {
+            return;
+        }
+        Map<String, String> updated = new LinkedHashMap<>(accountPasswords);
+        updated.remove(selected);
+        writeChannelConfiguration(updated, "频道已删除: " + selected);
+    }
+
+    private void changeConfiguredChannelPassword() {
+        if (!ensureChannelManagementAllowed()) {
+            return;
+        }
+        String selected = channelManagementList.getSelectedValue();
+        if (selected == null || PUBLIC_CHANNEL_DISPLAY.equals(selected)) {
+            return;
+        }
+        String password = noChannelPasswordCheckBox.isSelected()
+                ? "" : new String(channelPasswordField.getPassword());
+        String validationError = validateChannelInput(selected, password, noChannelPasswordCheckBox.isSelected());
+        if (validationError != null) {
+            JOptionPane.showMessageDialog(this, validationError, "无法修改密码", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        Map<String, String> updated = new LinkedHashMap<>(accountPasswords);
+        updated.put(selected, password);
+        if (writeChannelConfiguration(updated, "频道密码已修改: " + selected)) {
+            channelPasswordField.setText("");
+            noChannelPasswordCheckBox.setSelected(false);
+        }
+    }
+
+    private boolean ensureChannelManagementAllowed() {
+        if (isChannelManagementAllowed()) {
+            return true;
+        }
+        JOptionPane.showMessageDialog(this, "请先关闭服务器，再管理频道", "频道管理已锁定",
+                JOptionPane.WARNING_MESSAGE);
+        refreshChannelManagementState();
+        return false;
+    }
+
+    private String validateChannelInput(String name, String password, boolean noPassword) {
+        if (name.isEmpty()) {
+            return "请输入频道名";
+        }
+        if ("public".equalsIgnoreCase(name) || "公共".equals(name)
+                || PUBLIC_CHANNEL_GROUP.equalsIgnoreCase(name)) {
+            return "公开频道是内置频道，不能重复创建";
+        }
+        if (name.indexOf('|') >= 0 || name.indexOf('\n') >= 0 || name.indexOf('\r') >= 0
+                || name.indexOf('{') >= 0 || name.indexOf('}') >= 0) {
+            return "频道名不能包含 |、换行或大括号";
+        }
+        if (!noPassword && password.isEmpty()) {
+            return "请输入密码，或勾选无密码";
+        }
+        if (password.indexOf('|') >= 0 || password.indexOf('\n') >= 0 || password.indexOf('\r') >= 0
+                || password.indexOf('{') >= 0 || password.indexOf('}') >= 0) {
+            return "密码不能包含 |、换行或大括号";
+        }
+        return null;
+    }
+
+    private boolean writeChannelConfiguration(Map<String, String> updated, String successMessage) {
+        try {
+            saveOnlyPdConfiguration(updated);
+            log(successMessage);
+            refreshChannelManagementPanel();
+            return true;
+        } catch (IOException e) {
+            log("写入 " + ONLY_PD_CONFIG_FILE + " 失败: " + e.getMessage());
+            JOptionPane.showMessageDialog(this, "配置文件写入失败: " + e.getMessage(),
+                    "频道管理失败", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
     }
 
     private JPanel createOnlineUsersPanel() {
@@ -444,12 +867,15 @@ public class ChatServer extends JFrame {
             grouped.put(channel, new TreeSet<>());
         }
         for (Map.Entry<String, List<ClientHandler>> entry : groups.entrySet()) {
-            grouped.computeIfAbsent(entry.getKey(), key -> new TreeSet<>());
+            Set<String> activeUsers = new TreeSet<>();
             for (ClientHandler client : new ArrayList<>(entry.getValue())) {
                 String nickname = client.getNickname();
                 if (nickname != null && onlineUsers.contains(nickname)) {
-                    grouped.get(entry.getKey()).add(nickname);
+                    activeUsers.add(nickname);
                 }
+            }
+            if (!activeUsers.isEmpty()) {
+                grouped.computeIfAbsent(entry.getKey(), key -> new TreeSet<>()).addAll(activeUsers);
             }
         }
 
@@ -504,10 +930,7 @@ public class ChatServer extends JFrame {
     private Set<String> knownVoiceChannels() {
         Set<String> channels = new LinkedHashSet<>();
         channels.add(PUBLIC_CHANNEL_GROUP);
-        channels.addAll(Arrays.asList("group_feixue", "group_ash", "group_antiash",
-                "group_binglin", "group_feixuehome", "group_toney"));
-        channels.addAll(groups.keySet());
-        channels.addAll(groupChatHistories.keySet());
+        channels.addAll(configuredChannelGroups);
         return channels;
     }
 
@@ -521,6 +944,16 @@ public class ChatServer extends JFrame {
         SwingUtilities.invokeLater(() -> {
             voiceChannelRefreshPending.set(false);
             Set<String> channels = knownVoiceChannels();
+            Iterator<Map.Entry<String, VoiceChannelRow>> rowIterator = voiceChannelRows.entrySet().iterator();
+            while (rowIterator.hasNext()) {
+                Map.Entry<String, VoiceChannelRow> entry = rowIterator.next();
+                if (!channels.contains(entry.getKey())) {
+                    voiceChannelsPanel.remove(entry.getValue().panel);
+                    rowIterator.remove();
+                    voiceChannelEnabled.remove(entry.getKey());
+                    voiceChannelVolumeGain.remove(entry.getKey());
+                }
+            }
             for (String group : channels) {
                 voiceChannelEnabled.putIfAbsent(group, true);
                 voiceChannelVolumeGain.putIfAbsent(group, MIN_VOICE_VOLUME_GAIN);
@@ -1289,16 +1722,23 @@ public class ChatServer extends JFrame {
 
     // 在服务器启动后添加定时清理任务
     private void startServer() {
+        if (serverStarting || (serverSocket != null && !serverSocket.isClosed())) {
+            return;
+        }
+        serverStarting = true;
+        startBtn.setEnabled(false);
+        refreshChannelManagementState();
         new Thread(() -> {
             try {
                 isRunning = true;
                 int port = Integer.parseInt(portField.getText());
                 serverSocket = new ServerSocket(port);
+                serverStarting = false;
                 log("服务器启动成功，监听端口: " + port);
                 refreshVoiceChannelPanel();
-                startBtn.setEnabled(false);
                 portField.setEnabled(false);
                 stopBtn.setEnabled(true); // 启用关闭服务器按钮
+                refreshChannelManagementState();
                 
                 // 清理旧的在线用户列表，确保下次启动后用户可以成功进入聊天
                 onlineUsers.clear();
@@ -1324,14 +1764,25 @@ public class ChatServer extends JFrame {
                     // 客户端刚连接时还未分配群组，暂时不加入任何群组列表
                 }
             } catch (IOException ex) {
+                serverStarting = false;
                 if (serverSocket != null && !serverSocket.isClosed()) {
                     log("服务器启动失败: " + ex.getMessage());
-                    SwingUtilities.invokeLater(() -> {
-                        startBtn.setEnabled(true);
-                        portField.setEnabled(true);
-                        stopBtn.setEnabled(false);
-                    });
                 }
+                SwingUtilities.invokeLater(() -> {
+                    startBtn.setEnabled(true);
+                    portField.setEnabled(true);
+                    stopBtn.setEnabled(false);
+                    refreshChannelManagementState();
+                });
+            } catch (RuntimeException ex) {
+                serverStarting = false;
+                log("服务器启动失败: " + ex.getMessage());
+                SwingUtilities.invokeLater(() -> {
+                    startBtn.setEnabled(true);
+                    portField.setEnabled(true);
+                    stopBtn.setEnabled(false);
+                    refreshChannelManagementState();
+                });
             }
         }).start();
     }
@@ -1423,10 +1874,12 @@ public class ChatServer extends JFrame {
         
         // 重置UI状态
         SwingUtilities.invokeLater(() -> {
+            serverStarting = false;
             startBtn.setEnabled(true);
             portField.setEnabled(true);
             stopBtn.setEnabled(false);
             refreshVoiceChannelPanel();
+            refreshChannelManagementState();
         });
         
         log("服务器已停止，所有客户端连接已断开，数据已清理");
@@ -1993,7 +2446,7 @@ public class ChatServer extends JFrame {
 
     private String normalizeChannelName(String channelName) {
         String name = channelName.trim();
-        String mapped = ACCOUNT_GROUPS.get(name);
+        String mapped = accountGroups.get(name);
         if (mapped != null) {
             return mapped;
         }
@@ -2408,7 +2861,7 @@ public class ChatServer extends JFrame {
                     }
                     // 检查是否是登录验证消息
                     else if (message.startsWith("/login|")) {
-                        String[] parts = message.substring(7).split("\\|");
+                        String[] parts = message.substring(7).split("\\|", -1);
                         String account, password;
 
                         // 支持两种登录格式：
@@ -2435,7 +2888,7 @@ public class ChatServer extends JFrame {
                         }
 
                         // 验证账户和密码
-                        String correctPassword = ACCOUNT_PASSWORDS.get(account);
+                        String correctPassword = accountPasswords.get(account);
                         if (correctPassword != null && correctPassword.equals(password)) {
                             sendMessage("/login_result|success"); // 发送登录成功消息
                             log("客户端 " + clientId + " 登录验证成功: " + account);

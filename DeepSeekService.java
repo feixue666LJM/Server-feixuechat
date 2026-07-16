@@ -7,7 +7,8 @@ import java.util.*;
 
 public class DeepSeekService {
     private static final String DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
-    private static final String API_KEY = "sk-1v2b1v4114a1wqgf114514qfdklqjg114514dkgwaw";
+    private static final String DEEPSEEK_CONFIG_FILE = "DeepSeekapi.json";
+    private static final String EMPTY_DEEPSEEK_CONFIG = "{deepseekapi:\n'api'\nonly\n};\n";
     private static final String MODEL = "deepseek-v4-flash";
     private static final int MAX_TOKENS = 3500;
 
@@ -18,8 +19,14 @@ public class DeepSeekService {
     
     private Map<String, Long> userLastAskTime = new HashMap<>(); // 用户ID -> 最后提问时间
     private List<String> blockedWords = new ArrayList<>();
+    private final Path deepSeekConfigPath;
+    private volatile String apiKey = "";
+    private long configLastModified = Long.MIN_VALUE;
+    private long configLastSize = Long.MIN_VALUE;
     
     public DeepSeekService() {
+        deepSeekConfigPath = resolveConfigPath();
+        reloadApiKeyIfChanged(true);
         loadBlockedWords();
     }
     
@@ -30,6 +37,11 @@ public class DeepSeekService {
      * @return 回答字符串，如果检查失败返回错误信息（以"ERROR:"开头）
      */
     public String ask(String userId, String question) {
+        reloadApiKeyIfChanged(false);
+        if (apiKey.isEmpty() || "api".equalsIgnoreCase(apiKey)) {
+            return "ERROR: DeepSeek API未配置，请填写DeepSeekapi.json";
+        }
+
         // 检查1: 30秒冷却限制
         long now = System.currentTimeMillis();
         Long lastTime = userLastAskTime.get(userId);
@@ -68,7 +80,7 @@ public class DeepSeekService {
         URL url = new URL(DEEPSEEK_API_URL);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("POST");
-        connection.setRequestProperty("Authorization", "Bearer " + API_KEY);
+        connection.setRequestProperty("Authorization", "Bearer " + apiKey);
         connection.setRequestProperty("Content-Type", "application/json");
         connection.setDoOutput(true);
         connection.setConnectTimeout(30000);
@@ -151,6 +163,87 @@ public class DeepSeekService {
         } catch (Exception e) {
             return "解析响应失败: " + e.getMessage();
         }
+    }
+
+    private synchronized void reloadApiKeyIfChanged(boolean force) {
+        try {
+            if (!Files.exists(deepSeekConfigPath)) {
+                Path parent = deepSeekConfigPath.getParent();
+                if (parent != null) {
+                    Files.createDirectories(parent);
+                }
+                Files.write(deepSeekConfigPath, EMPTY_DEEPSEEK_CONFIG.getBytes(StandardCharsets.UTF_8));
+            }
+            long modified = Files.getLastModifiedTime(deepSeekConfigPath).toMillis();
+            long size = Files.size(deepSeekConfigPath);
+            if (!force && modified == configLastModified && size == configLastSize) {
+                return;
+            }
+
+            String content = new String(Files.readAllBytes(deepSeekConfigPath), StandardCharsets.UTF_8);
+            String loadedApiKey = extractApiKey(content);
+            apiKey = loadedApiKey == null ? "" : loadedApiKey.trim();
+            configLastModified = modified;
+            configLastSize = size;
+            System.out.println(apiKey.isEmpty() || "api".equalsIgnoreCase(apiKey)
+                    ? "DeepSeekService: API未配置。"
+                    : "DeepSeekService: API配置已加载。");
+        } catch (IOException e) {
+            System.err.println("DeepSeekService: 读取API配置失败，将继续使用上次配置: " + e.getMessage());
+        }
+    }
+
+    private String extractApiKey(String content) {
+        int keyIndex = content.toLowerCase(Locale.ROOT).indexOf("deepseekapi");
+        if (keyIndex < 0) {
+            return "";
+        }
+        int colonIndex = content.indexOf(':', keyIndex);
+        if (colonIndex < 0) {
+            return "";
+        }
+        int singleQuoteStart = content.indexOf('\'', colonIndex + 1);
+        int doubleQuoteStart = content.indexOf('"', colonIndex + 1);
+        int quoteStart;
+        char quote;
+        if (singleQuoteStart >= 0 && (doubleQuoteStart < 0 || singleQuoteStart < doubleQuoteStart)) {
+            quoteStart = singleQuoteStart;
+            quote = '\'';
+        } else if (doubleQuoteStart >= 0) {
+            quoteStart = doubleQuoteStart;
+            quote = '"';
+        } else {
+            return "";
+        }
+        int quoteEnd = content.indexOf(quote, quoteStart + 1);
+        return quoteEnd < 0 ? "" : content.substring(quoteStart + 1, quoteEnd);
+    }
+
+    private Path resolveConfigPath() {
+        Path workingPath = Paths.get(System.getProperty("user.dir"), DEEPSEEK_CONFIG_FILE)
+                .toAbsolutePath().normalize();
+        if (Files.exists(workingPath)) {
+            return workingPath;
+        }
+        try {
+            Path codePath = Paths.get(DeepSeekService.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI()).toAbsolutePath().normalize();
+            Path codeDirectory = Files.isDirectory(codePath) ? codePath : codePath.getParent();
+            if (codeDirectory != null) {
+                Path besideCode = codeDirectory.resolve(DEEPSEEK_CONFIG_FILE);
+                if (Files.exists(besideCode)) {
+                    return besideCode;
+                }
+                Path directoryName = codeDirectory.getFileName();
+                if (directoryName != null && "target".equalsIgnoreCase(directoryName.toString())
+                        && codeDirectory.getParent() != null) {
+                    return codeDirectory.getParent().resolve(DEEPSEEK_CONFIG_FILE);
+                }
+            }
+        } catch (Exception ignored) {
+            // 回退到服务器启动目录。
+        }
+        return workingPath;
     }
     
     /**
