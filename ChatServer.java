@@ -1736,9 +1736,11 @@ public class ChatServer extends JFrame {
                 serverStarting = false;
                 log("服务器启动成功，监听端口: " + port);
                 refreshVoiceChannelPanel();
-                portField.setEnabled(false);
-                stopBtn.setEnabled(true); // 启用关闭服务器按钮
-                refreshChannelManagementState();
+                SwingUtilities.invokeLater(() -> {
+                    portField.setEnabled(false);
+                    stopBtn.setEnabled(true); // 启用关闭服务器按钮
+                    refreshChannelManagementState();
+                });
                 
                 // 清理旧的在线用户列表，确保下次启动后用户可以成功进入聊天
                 onlineUsers.clear();
