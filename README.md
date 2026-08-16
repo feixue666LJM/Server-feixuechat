@@ -5,3 +5,4 @@ Latest additions
 2. A new voice chat server has been launched, enabling independent voice communication within dedicated groups.
 3. The private chat server has been overhauled, giving you full control to accept or reject private messages as you choose.
 4. Top-tier cross-platform play for Minecraft, supporting all Java-enabled devices—Android and Linux.
+5. You can set up the server to be used as a website, as long as the port and your IP are correct
