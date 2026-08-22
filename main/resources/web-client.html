@@ -1,0 +1,1757 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>飞雪聊天</title>
+  <style>
+    :root {
+      --bg: #f4f6f5;
+      --surface: #ffffff;
+      --surface-soft: #f8faf9;
+      --text: #17211d;
+      --muted: #64716b;
+      --line: #dbe2de;
+      --line-strong: #b9c6c0;
+      --accent: #176b52;
+      --accent-hover: #10563f;
+      --accent-soft: #e7f3ee;
+      --info: #285f9e;
+      --warning: #a06000;
+      --danger: #b33636;
+      --shadow: 0 10px 32px rgba(27, 43, 36, .09);
+      --radius: 8px;
+      font-family: "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; min-height: 100%; margin: 0; }
+    body { background: var(--bg); color: var(--text); font-size: 14px; letter-spacing: 0; }
+    button, input, textarea, select { font: inherit; letter-spacing: 0; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .48; }
+    [hidden] { display: none !important; }
+
+    .screen { min-height: 100dvh; }
+    .entry-screen {
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: #eef2f0;
+    }
+    .entry-panel {
+      width: min(430px, 100%);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 28px;
+    }
+    .brand-row { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 3px; font-size: 19px; line-height: 1.35; }
+    h2 { margin-bottom: 16px; font-size: 17px; }
+    h3 { margin-bottom: 10px; font-size: 14px; }
+    .subtle { color: var(--muted); font-size: 13px; }
+    .question {
+      min-height: 48px;
+      margin: 0 0 18px;
+      padding: 12px 14px;
+      border-left: 3px solid var(--accent);
+      background: var(--surface-soft);
+      color: var(--text);
+      line-height: 1.65;
+    }
+    .field { display: grid; gap: 7px; margin-bottom: 15px; }
+    .field > label { color: #34413b; font-size: 13px; font-weight: 600; }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    input, select { min-height: 40px; padding: 8px 10px; }
+    textarea { padding: 9px 10px; resize: none; line-height: 1.5; }
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(23, 107, 82, .12);
+    }
+    .primary, .secondary, .danger, .icon-btn, .text-btn {
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-weight: 600;
+    }
+    .primary { background: var(--accent); color: #fff; }
+    .primary:hover:not(:disabled) { background: var(--accent-hover); }
+    .secondary { border-color: var(--line-strong); background: #fff; color: var(--text); }
+    .secondary:hover:not(:disabled) { border-color: #8da198; background: var(--surface-soft); }
+    .danger { border-color: #e5bbbb; background: #fff; color: var(--danger); }
+    .danger:hover:not(:disabled) { background: #fff4f4; }
+    .wide { width: 100%; }
+    .form-error { min-height: 20px; margin: 8px 0 0; color: var(--danger); font-size: 13px; }
+    .connection-line { display: flex; align-items: center; gap: 7px; margin-bottom: 20px; color: var(--muted); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #9aa49f; }
+    .status-dot.online { background: #1a8a62; box-shadow: 0 0 0 3px #dff2ea; }
+    .status-dot.busy { background: #cb7c08; box-shadow: 0 0 0 3px #fff0d9; }
+
+    #appScreen { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+    .topbar {
+      flex: 0 0 58px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .topbar .brand-mark { width: 32px; height: 32px; font-size: 15px; }
+    .topbar-title { min-width: 0; }
+    .topbar-title strong { display: block; font-size: 15px; white-space: nowrap; }
+    .topbar-title span { display: block; max-width: 280px; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+    .topbar-spacer { flex: 1; }
+    .identity { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .identity-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+    .p2p-code { color: var(--muted); white-space: nowrap; }
+    .p2p-code code { color: var(--text); font-size: 13px; font-weight: 700; }
+    .icon-btn {
+      display: inline-grid;
+      place-items: center;
+      width: 38px;
+      min-width: 38px;
+      padding: 0;
+      border-color: var(--line);
+      background: #fff;
+      color: #34413b;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .icon-btn:hover:not(:disabled) { background: #f2f5f3; }
+    .icon-btn.danger-icon { color: var(--danger); }
+
+    .mobile-tabs { display: none; }
+    .workspace {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 245px minmax(340px, 1fr) 286px;
+      min-height: 0;
+      background: var(--surface);
+    }
+    .side-panel { min-width: 0; overflow: auto; background: var(--surface-soft); }
+    .side-panel.left { border-right: 1px solid var(--line); }
+    .side-panel.right { border-left: 1px solid var(--line); }
+    .panel-section { padding: 16px; border-bottom: 1px solid var(--line); }
+    .section-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .section-title-row h3 { margin: 0; }
+    .count { color: var(--muted); font-size: 12px; }
+    .current-channel { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .channel-symbol { color: var(--accent); font-size: 18px; font-weight: 700; }
+    .current-channel span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .user-list { display: grid; gap: 3px; }
+    .user-item {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      width: 100%;
+      min-height: 36px;
+      padding: 7px 8px;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+    }
+    .user-item:hover, .user-item.selected { border-color: var(--line); background: #fff; }
+    .user-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: #23a271; }
+    .user-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .empty-small { padding: 10px 2px; color: var(--muted); font-size: 13px; }
+
+    .chat-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #fff; }
+    .chat-heading {
+      flex: 0 0 48px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .chat-heading strong { font-size: 14px; }
+    .chat-heading span { color: var(--muted); font-size: 12px; }
+    .message-feed {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 18px max(16px, calc((100% - 760px) / 2));
+      scroll-behavior: smooth;
+      background: #fff;
+    }
+    .empty-state { display: grid; place-items: center; min-height: 100%; color: var(--muted); text-align: center; }
+    .message { display: flex; flex-direction: column; align-items: flex-start; margin: 0 0 15px; }
+    .message.own { align-items: flex-end; }
+    .message-meta { display: flex; align-items: baseline; gap: 7px; margin: 0 3px 5px; color: var(--muted); font-size: 11px; }
+    .message-meta strong { color: #46534d; font-size: 12px; }
+    .message-body {
+      max-width: min(80%, 620px);
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--surface-soft);
+      padding: 9px 11px;
+      line-height: 1.55;
+    }
+    .message.own .message-body { border-color: #b8d9cc; background: var(--accent-soft); }
+    .message.system { align-items: stretch; margin: 9px 0; }
+    .message.system .message-body { max-width: none; border: 0; background: transparent; color: var(--muted); padding: 3px 0; text-align: center; font-size: 12px; }
+    .message.ai .message-body { border-left: 3px solid var(--info); background: #f3f7fb; }
+    .message img { display: block; width: auto; max-width: min(100%, 460px); max-height: 360px; border-radius: 5px; object-fit: contain; background: #eef1ef; }
+    .message audio { display: block; width: min(300px, 68vw); max-width: 100%; height: 38px; }
+    .history-separator { display: flex; align-items: center; gap: 10px; margin: 4px 0 18px; color: var(--muted); font-size: 12px; }
+    .history-separator::before, .history-separator::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+    .composer { flex: 0 0 auto; border-top: 1px solid var(--line); padding: 10px 14px 12px; background: #fff; }
+    .composer-row { display: grid; grid-template-columns: 38px 38px minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+    .composer textarea { min-height: 40px; max-height: 116px; }
+    .recording { color: var(--danger) !important; border-color: #d99b9b !important; background: #fff3f3 !important; }
+    .composer-status { min-height: 18px; padding: 4px 2px 0; color: var(--muted); font-size: 11px; }
+
+    .voice-status { display: flex; align-items: center; gap: 8px; margin-bottom: 11px; color: var(--muted); font-size: 13px; }
+    .voice-indicator { width: 9px; height: 9px; border-radius: 50%; background: #aab4af; }
+    .voice-indicator.active { background: #1b9b6c; box-shadow: 0 0 0 3px #dbf1e8; }
+    .voice-indicator.pending { background: #cf840d; box-shadow: 0 0 0 3px #fff0d8; }
+    .stack-actions { display: grid; gap: 8px; }
+    .ai-input { min-height: 78px; margin-bottom: 8px; }
+    .inline-form { display: grid; gap: 8px; }
+    .peer-target { min-height: 20px; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+
+    dialog {
+      width: min(520px, calc(100% - 24px));
+      max-height: min(720px, calc(100dvh - 24px));
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      color: var(--text);
+      box-shadow: 0 18px 60px rgba(21, 35, 29, .22);
+    }
+    dialog::backdrop { background: rgba(23, 33, 29, .42); }
+    .dialog-shell { display: flex; flex-direction: column; max-height: min(720px, calc(100dvh - 24px)); }
+    .dialog-header { flex: 0 0 54px; display: flex; align-items: center; gap: 10px; padding: 0 14px 0 18px; border-bottom: 1px solid var(--line); }
+    .dialog-header strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dialog-header .icon-btn { margin-left: auto; }
+    .private-status { padding: 8px 16px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+    .private-feed { min-height: 260px; height: 46dvh; overflow-y: auto; padding: 16px; background: var(--surface-soft); }
+    .private-composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 12px; border-top: 1px solid var(--line); }
+    .call-actions { display: flex; gap: 7px; margin-left: auto; }
+    .call-dialog-body { padding: 24px; text-align: center; }
+    .call-dialog-body p { margin-bottom: 22px; color: var(--muted); line-height: 1.6; }
+    .call-dialog-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    .toast-region { position: fixed; z-index: 1000; right: 16px; bottom: 16px; display: grid; gap: 8px; width: min(360px, calc(100% - 32px)); pointer-events: none; }
+    .toast { border: 1px solid var(--line-strong); border-left: 4px solid var(--info); border-radius: 6px; background: #fff; box-shadow: var(--shadow); padding: 11px 13px; color: var(--text); line-height: 1.45; }
+    .toast.error { border-left-color: var(--danger); }
+    .toast.success { border-left-color: var(--accent); }
+
+    @media (max-width: 980px) {
+      .workspace { grid-template-columns: 210px minmax(330px, 1fr) 250px; }
+      .identity-name { max-width: 110px; }
+    }
+    @media (max-width: 820px) {
+      #appScreen { height: 100dvh; }
+      .toast-region { top: 108px; right: 8px; bottom: auto; width: calc(100% - 16px); }
+      .topbar { padding: 0 10px; gap: 9px; }
+      .topbar-title span, .identity-name { display: none; }
+      .p2p-code span { display: none; }
+      .mobile-tabs { flex: 0 0 42px; display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--line); background: #fff; }
+      .mobile-tabs button { border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); }
+      .mobile-tabs button.active { border-bottom-color: var(--accent); color: var(--accent); font-weight: 700; }
+      .workspace { display: block; position: relative; }
+      .workspace > * { display: none; height: 100%; }
+      .workspace[data-mobile-panel="chat"] .chat-panel,
+      .workspace[data-mobile-panel="users"] .side-panel.left,
+      .workspace[data-mobile-panel="tools"] .side-panel.right { display: flex; }
+      .side-panel { flex-direction: column; width: 100%; border: 0 !important; }
+      .message-feed { padding: 14px 12px; }
+      .chat-heading { padding: 0 12px; }
+      .composer { padding: 8px; }
+      .message-body { max-width: 88%; }
+    }
+    @media (max-width: 480px) {
+      .entry-screen { padding: 12px; }
+      .entry-panel { padding: 22px 18px; }
+      .topbar-title strong { font-size: 14px; }
+      .p2p-code { font-size: 11px; }
+      .composer-row { grid-template-columns: 36px 36px minmax(0, 1fr); }
+      .composer-row .primary { grid-column: 3; width: 100%; }
+      .composer-row .icon-btn { width: 36px; min-width: 36px; }
+      .private-feed { height: 52dvh; }
+    }
+  </style>
+</head>
+<body>
+  <section id="gateScreen" class="screen entry-screen" aria-labelledby="gateTitle">
+    <main class="entry-panel">
+      <div class="brand-row">
+        <div class="brand-mark" aria-hidden="true">飞</div>
+        <div><h1 id="gateTitle">网页验证</h1><div class="subtle">飞雪聊天</div></div>
+      </div>
+      <div class="connection-line"><span id="gateDot" class="status-dot busy"></span><span id="gateConnectionText">正在连接服务器</span></div>
+      <p id="challengeQuestion" class="question">正在获取验证问题...</p>
+      <form id="verifyForm" autocomplete="off">
+        <div class="field">
+          <label for="verifyAnswer">回答</label>
+          <input id="verifyAnswer" type="text" maxlength="80" autocomplete="off" disabled required>
+        </div>
+        <button id="verifyButton" class="primary wide" type="submit" disabled>验证</button>
+      </form>
+      <button id="reconnectButton" class="secondary wide" type="button" hidden>重新连接</button>
+      <p id="verifyError" class="form-error" role="alert"></p>
+    </main>
+  </section>
+
+  <section id="loginScreen" class="screen entry-screen" aria-labelledby="loginTitle" hidden>
+    <main class="entry-panel">
+      <div class="brand-row">
+        <div class="brand-mark" aria-hidden="true">飞</div>
+        <div><h1 id="loginTitle">进入聊天</h1><div class="subtle">选择频道并设置昵称</div></div>
+      </div>
+      <div class="connection-line"><span class="status-dot online"></span><span>网页验证已通过</span></div>
+      <form id="loginForm" autocomplete="off">
+        <div class="field">
+          <label for="nicknameInput">昵称</label>
+          <input id="nicknameInput" type="text" maxlength="30" autocomplete="nickname" required>
+        </div>
+        <div class="field">
+          <label for="channelSelect">频道</label>
+          <select id="channelSelect" required disabled><option value="">正在读取频道...</option></select>
+        </div>
+        <div id="channelPasswordField" class="field" hidden>
+          <label for="channelPasswordInput">频道密码</label>
+          <input id="channelPasswordInput" type="password" maxlength="128" autocomplete="current-password">
+        </div>
+        <button id="loginButton" class="primary wide" type="submit" disabled>进入频道</button>
+      </form>
+      <p id="loginError" class="form-error" role="alert"></p>
+    </main>
+  </section>
+
+  <section id="appScreen" class="screen" hidden>
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true">飞</div>
+      <div class="topbar-title"><strong>飞雪聊天</strong><span id="topChannelName"></span></div>
+      <div class="topbar-spacer"></div>
+      <div class="identity"><span id="topNickname" class="identity-name"></span><span class="p2p-code"><span>私聊码 </span><code id="myP2PCode">-----</code></span></div>
+      <button id="disconnectButton" class="icon-btn danger-icon" type="button" title="断开连接" aria-label="断开连接">⏻</button>
+    </header>
+
+    <nav class="mobile-tabs" aria-label="移动端页面">
+      <button type="button" data-panel="users">用户</button>
+      <button class="active" type="button" data-panel="chat">聊天</button>
+      <button type="button" data-panel="tools">工具</button>
+    </nav>
+
+    <div id="workspace" class="workspace" data-mobile-panel="chat">
+      <aside class="side-panel left" aria-label="频道和在线用户">
+        <section class="panel-section">
+          <h3>当前频道</h3>
+          <div class="current-channel"><span class="channel-symbol">#</span><span id="currentChannelName"></span></div>
+        </section>
+        <section class="panel-section">
+          <div class="section-title-row"><h3>在线用户</h3><span id="onlineCount" class="count">0</span></div>
+          <div id="onlineUsers" class="user-list"><div class="empty-small">暂无在线用户</div></div>
+        </section>
+      </aside>
+
+      <main class="chat-panel">
+        <div class="chat-heading"><strong>频道聊天</strong><span id="historyState">正在同步</span></div>
+        <div id="messageFeed" class="message-feed" aria-live="polite"><div id="emptyMessages" class="empty-state">暂无消息</div></div>
+        <form id="channelMessageForm" class="composer">
+          <div class="composer-row">
+            <button id="imageButton" class="icon-btn" type="button" title="发送图片" aria-label="发送图片">＋</button>
+            <input id="imageInput" type="file" accept="image/*" hidden>
+            <button id="voiceNoteButton" class="icon-btn" type="button" title="录制语音留言" aria-label="录制语音留言">●</button>
+            <textarea id="channelMessageInput" rows="1" maxlength="300" placeholder="输入频道消息" aria-label="频道消息"></textarea>
+            <button class="primary" type="submit">发送</button>
+          </div>
+          <div id="composerStatus" class="composer-status"></div>
+        </form>
+      </main>
+
+      <aside class="side-panel right" aria-label="聊天工具">
+        <section class="panel-section">
+          <h3>频道实时语音</h3>
+          <div class="voice-status"><span id="groupVoiceIndicator" class="voice-indicator"></span><span id="groupVoiceStatus">未加入</span></div>
+          <button id="groupVoiceButton" class="secondary wide" type="button">加入频道语音</button>
+        </section>
+        <section class="panel-section">
+          <h3>用户私聊</h3>
+          <form id="p2pConnectForm" class="inline-form" autocomplete="off">
+            <div id="selectedPeer" class="peer-target">请先选择在线用户</div>
+            <input id="peerPasswordInput" type="password" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="对方的 5 位私聊码" aria-label="对方的5位私聊码">
+            <button id="p2pConnectButton" class="secondary wide" type="submit" disabled>打开私聊</button>
+          </form>
+        </section>
+        <section class="panel-section">
+          <h3>DeepSeek</h3>
+          <form id="deepSeekForm">
+            <textarea id="deepSeekInput" class="ai-input" rows="3" maxlength="300" placeholder="输入问题" aria-label="DeepSeek问题"></textarea>
+            <button class="secondary wide" type="submit">提问</button>
+          </form>
+        </section>
+      </aside>
+    </div>
+  </section>
+
+  <dialog id="privateDialog" aria-labelledby="privatePeerName">
+    <div class="dialog-shell">
+      <header class="dialog-header">
+        <strong id="privatePeerName">私聊</strong>
+        <div class="call-actions">
+          <button id="privateCallButton" class="secondary" type="button">申请语音</button>
+          <button id="privateHangupButton" class="danger" type="button" hidden>挂断</button>
+        </div>
+        <button id="privateCloseButton" class="icon-btn" type="button" title="关闭私聊窗口" aria-label="关闭私聊窗口">×</button>
+      </header>
+      <div id="privateStatus" class="private-status">私聊已建立</div>
+      <div id="privateFeed" class="private-feed" aria-live="polite"></div>
+      <form id="privateMessageForm" class="private-composer">
+        <input id="privateMessageInput" type="text" maxlength="300" placeholder="输入私聊消息" aria-label="私聊消息">
+        <button class="primary" type="submit">发送</button>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog id="incomingCallDialog" aria-labelledby="incomingCallTitle">
+    <div class="call-dialog-body">
+      <h2 id="incomingCallTitle">语音通话申请</h2>
+      <p id="incomingCallText"></p>
+      <div class="call-dialog-actions">
+        <button id="rejectCallButton" class="danger" type="button">拒绝</button>
+        <button id="acceptCallButton" class="primary" type="button">接听</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toastRegion" class="toast-region" aria-live="assertive"></div>
+
+  <script>
+    "use strict";
+
+    const DEFAULT_CLIENT_VERSION = "3.0.1";
+    const IMAGE_CHUNK_SIZE = 50000;
+    const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+    const IDLE_LIMIT_MS = 60 * 60 * 1000;
+    const LIVE_SAMPLE_RATE = 8000;
+    const LIVE_FRAME_SAMPLES = 160;
+    const LIVE_FRAME_BYTES = 320;
+
+    const $ = (id) => document.getElementById(id);
+    const ui = {
+      gateScreen: $("gateScreen"), loginScreen: $("loginScreen"), appScreen: $("appScreen"),
+      gateDot: $("gateDot"), gateConnectionText: $("gateConnectionText"), challengeQuestion: $("challengeQuestion"),
+      verifyForm: $("verifyForm"), verifyAnswer: $("verifyAnswer"), verifyButton: $("verifyButton"), verifyError: $("verifyError"),
+      reconnectButton: $("reconnectButton"), loginForm: $("loginForm"), nicknameInput: $("nicknameInput"),
+      channelSelect: $("channelSelect"), channelPasswordField: $("channelPasswordField"),
+      channelPasswordInput: $("channelPasswordInput"), loginButton: $("loginButton"), loginError: $("loginError"),
+      topChannelName: $("topChannelName"), topNickname: $("topNickname"), myP2PCode: $("myP2PCode"),
+      disconnectButton: $("disconnectButton"), workspace: $("workspace"), currentChannelName: $("currentChannelName"),
+      onlineUsers: $("onlineUsers"), onlineCount: $("onlineCount"), historyState: $("historyState"),
+      messageFeed: $("messageFeed"), emptyMessages: $("emptyMessages"), channelMessageForm: $("channelMessageForm"),
+      channelMessageInput: $("channelMessageInput"), imageButton: $("imageButton"), imageInput: $("imageInput"),
+      voiceNoteButton: $("voiceNoteButton"), composerStatus: $("composerStatus"), groupVoiceIndicator: $("groupVoiceIndicator"),
+      groupVoiceStatus: $("groupVoiceStatus"), groupVoiceButton: $("groupVoiceButton"), selectedPeer: $("selectedPeer"),
+      peerPasswordInput: $("peerPasswordInput"), p2pConnectButton: $("p2pConnectButton"), p2pConnectForm: $("p2pConnectForm"),
+      deepSeekForm: $("deepSeekForm"), deepSeekInput: $("deepSeekInput"), privateDialog: $("privateDialog"),
+      privatePeerName: $("privatePeerName"), privateStatus: $("privateStatus"), privateFeed: $("privateFeed"),
+      privateMessageForm: $("privateMessageForm"), privateMessageInput: $("privateMessageInput"),
+      privateCallButton: $("privateCallButton"), privateHangupButton: $("privateHangupButton"),
+      privateCloseButton: $("privateCloseButton"), incomingCallDialog: $("incomingCallDialog"),
+      incomingCallText: $("incomingCallText"), acceptCallButton: $("acceptCallButton"), rejectCallButton: $("rejectCallButton"),
+      toastRegion: $("toastRegion")
+    };
+
+    const state = {
+      socket: null,
+      clientVersion: DEFAULT_CLIENT_VERSION,
+      manuallyDisconnected: false,
+      verified: false,
+      channels: [],
+      channelsComplete: false,
+      loginPhase: "idle",
+      selectedChannel: null,
+      nickname: "",
+      sessionReady: false,
+      historyReceiving: false,
+      historyReceived: false,
+      onlineUsers: [],
+      selectedPeerName: "",
+      myP2PPassword: "-----",
+      pendingP2PVerify: null,
+      activePrivatePeer: "",
+      conversations: new Map(),
+      incomingCall: null,
+      outgoingCallPeer: "",
+      liveMode: null,
+      livePeer: "",
+      liveStarting: false,
+      liveStartToken: null,
+      live: null,
+      note: null,
+      heartbeatTimer: null,
+      idleTimer: null,
+      lastMeaningfulActivity: Date.now(),
+      imageReceivers: new Map(),
+      objectUrls: new Set()
+    };
+
+    function showScreen(name) {
+      ui.gateScreen.hidden = name !== "gate";
+      ui.loginScreen.hidden = name !== "login";
+      ui.appScreen.hidden = name !== "app";
+    }
+
+    function setGateStatus(text, mode) {
+      ui.gateConnectionText.textContent = text;
+      ui.gateDot.className = "status-dot" + (mode ? " " + mode : "");
+    }
+
+    function showToast(message, type = "info", duration = 4200) {
+      const item = document.createElement("div");
+      item.className = "toast " + type;
+      item.textContent = message;
+      ui.toastRegion.appendChild(item);
+      while (ui.toastRegion.children.length > 2) ui.toastRegion.firstElementChild.remove();
+      window.setTimeout(() => item.remove(), duration);
+    }
+
+    function encodeBase64Utf8(value) {
+      const bytes = new TextEncoder().encode(value);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      }
+      return btoa(binary);
+    }
+
+    function decodeBase64Utf8(value) {
+      try {
+        const binary = atob(value);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+      } catch (_) {
+        return "";
+      }
+    }
+
+    function bytesToBase64(bytes) {
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      }
+      return btoa(binary);
+    }
+
+    function base64ToBytes(value) {
+      try {
+        const binary = atob(value);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function protocolSafe(value) {
+      return !/[|\r\n\u0000-\u001f]/.test(value);
+    }
+
+    function isOpen() {
+      return state.socket && state.socket.readyState === WebSocket.OPEN;
+    }
+
+    function sendProtocol(message, meaningful = false) {
+      if (!isOpen()) return false;
+      state.socket.send(message);
+      if (meaningful) state.lastMeaningfulActivity = Date.now();
+      return true;
+    }
+
+    function websocketUrl() {
+      const secure = location.protocol === "https:";
+      return (secure ? "wss://" : "ws://") + location.host + "/ws";
+    }
+
+    function resetConnectionState() {
+      state.clientVersion = DEFAULT_CLIENT_VERSION;
+      state.verified = false;
+      state.channels = [];
+      state.channelsComplete = false;
+      state.loginPhase = "idle";
+      state.selectedChannel = null;
+      state.sessionReady = false;
+      state.historyReceiving = false;
+      state.historyReceived = false;
+      state.onlineUsers = [];
+      state.selectedPeerName = "";
+      state.pendingP2PVerify = null;
+      state.activePrivatePeer = "";
+      state.conversations.clear();
+      state.incomingCall = null;
+      state.outgoingCallPeer = "";
+      state.myP2PPassword = "-----";
+      state.imageReceivers.clear();
+      state.objectUrls.forEach((url) => URL.revokeObjectURL(url));
+      state.objectUrls.clear();
+      ui.myP2PCode.textContent = "-----";
+      ui.emptyMessages.hidden = false;
+      ui.messageFeed.replaceChildren(ui.emptyMessages);
+      ui.historyState.textContent = "正在同步";
+      ui.nicknameInput.disabled = false;
+      ui.channelPasswordInput.disabled = false;
+      ui.privateFeed.replaceChildren();
+      setGroupVoiceUi("idle", "未加入");
+      renderChannels();
+      renderOnlineUsers();
+    }
+
+    function connectWebSocket() {
+      cleanupSocketTimers();
+      cleanupLiveAudio();
+      stopVoiceNote(false);
+      resetConnectionState();
+      state.manuallyDisconnected = false;
+      showScreen("gate");
+      ui.verifyForm.hidden = false;
+      ui.reconnectButton.hidden = true;
+      ui.verifyAnswer.value = "";
+      ui.verifyAnswer.disabled = true;
+      ui.verifyButton.disabled = true;
+      ui.verifyError.textContent = "";
+      ui.challengeQuestion.textContent = "正在获取验证问题...";
+      setGateStatus("正在连接服务器", "busy");
+
+      if (!location.host) {
+        handleSocketClosed("该页面需要由聊天服务器打开");
+        return;
+      }
+
+      try {
+        state.socket = new WebSocket(websocketUrl());
+      } catch (_) {
+        handleSocketClosed("无法创建服务器连接");
+        return;
+      }
+
+      state.socket.addEventListener("open", () => {
+        setGateStatus("已连接，等待验证", "online");
+        state.heartbeatTimer = window.setInterval(() => sendProtocol("/ping"), 30000);
+      });
+      state.socket.addEventListener("message", (event) => {
+        if (typeof event.data === "string") handleServerMessage(event.data);
+      });
+      state.socket.addEventListener("error", () => {
+        if (!state.manuallyDisconnected) setGateStatus("连接出现错误", "");
+      });
+      state.socket.addEventListener("close", () => {
+        const message = state.manuallyDisconnected ? "连接已断开" : "服务器连接已关闭";
+        handleSocketClosed(message);
+      });
+    }
+
+    function cleanupSocketTimers() {
+      if (state.heartbeatTimer) window.clearInterval(state.heartbeatTimer);
+      if (state.idleTimer) window.clearInterval(state.idleTimer);
+      state.heartbeatTimer = null;
+      state.idleTimer = null;
+    }
+
+    function handleSocketClosed(message) {
+      cleanupSocketTimers();
+      cleanupLiveAudio();
+      stopVoiceNote(false);
+      state.sessionReady = false;
+      if (ui.privateDialog.open) ui.privateDialog.close();
+      if (ui.incomingCallDialog.open) ui.incomingCallDialog.close();
+      showScreen("gate");
+      ui.verifyForm.hidden = true;
+      ui.reconnectButton.hidden = false;
+      ui.challengeQuestion.textContent = message;
+      setGateStatus("未连接", "");
+    }
+
+    function disconnect(reason) {
+      state.manuallyDisconnected = true;
+      if (isOpen()) {
+        try { state.socket.send("/web_disconnect"); } catch (_) { }
+        state.socket.close(1000, "client disconnect");
+      } else {
+        handleSocketClosed(reason || "连接已断开");
+      }
+      if (reason) showToast(reason, "info");
+    }
+
+    function handleServerMessage(message) {
+      if (message.startsWith("/web_challenge|")) {
+        const question = decodeBase64Utf8(message.substring(15));
+        ui.challengeQuestion.textContent = question || "运营者是谁？";
+        ui.verifyAnswer.disabled = false;
+        ui.verifyButton.disabled = false;
+        ui.verifyAnswer.focus();
+        return;
+      }
+      if (message.startsWith("/web_verify_result|")) {
+        const result = message.substring(19).split("|", 1)[0];
+        if (result === "success") {
+          state.verified = true;
+          ui.verifyError.textContent = "";
+          showScreen("login");
+          ui.nicknameInput.focus();
+        } else {
+          ui.verifyError.textContent = "回答不正确，请重新输入";
+          ui.verifyAnswer.select();
+          ui.verifyButton.disabled = false;
+        }
+        return;
+      }
+      if (message.startsWith("/web_minimum_version|")) {
+        const version = message.substring("/web_minimum_version|".length).trim();
+        if (/^\d+(?:\.\d+){0,3}$/.test(version)) state.clientVersion = version;
+        return;
+      }
+      if (message.startsWith("/web_login_error|")) {
+        failLogin(message.substring(17) || "频道登录失败");
+        return;
+      }
+      if (message.startsWith("/web_error|")) {
+        showToast(message.substring(11) || "网页请求失败", "error");
+        return;
+      }
+      if (message.startsWith("/web_idle_timeout|") || message.startsWith("/web_shutdown|") || message.startsWith("/server_shutdown|")) {
+        const separator = message.indexOf("|");
+        const reason = separator >= 0 ? message.substring(separator + 1) : "服务器已断开连接";
+        state.manuallyDisconnected = true;
+        handleSocketClosed(reason);
+        if (isOpen()) state.socket.close(1000, "server shutdown");
+        return;
+      }
+      if (message.startsWith("/web_channel|")) {
+        const parts = message.split("|", 4);
+        if (parts.length === 4) {
+          const channel = {
+            name: decodeBase64Utf8(parts[1]),
+            group: decodeBase64Utf8(parts[2]),
+            requiresPassword: parts[3] === "1"
+          };
+          if (channel.name && channel.group) {
+            const index = state.channels.findIndex((item) => item.group === channel.group);
+            if (index >= 0) state.channels[index] = channel;
+            else state.channels.push(channel);
+            renderChannels();
+          }
+        }
+        return;
+      }
+      if (message === "/web_channels_end") {
+        state.channelsComplete = true;
+        renderChannels();
+        return;
+      }
+      if (message.startsWith("/version_check|")) {
+        const result = message.substring(15);
+        if (result === "success") continueLoginAfterVersion();
+        else failLogin("客户端版本不符合服务器要求");
+        return;
+      }
+      if (message.startsWith("/login_result|")) {
+        const result = message.substring(14);
+        if (result === "success") sendSessionIdentity();
+        else failLogin("频道名称或密码不正确");
+        return;
+      }
+      if (message === "/session_ready|success") {
+        enterChat();
+        return;
+      }
+      if (message.startsWith("/history|")) {
+        handleHistory(message.substring(9));
+        return;
+      }
+      if (message.startsWith("/online_users|")) {
+        state.onlineUsers = message.substring(14).split(",").map((value) => value.trim()).filter(Boolean);
+        renderOnlineUsers();
+        return;
+      }
+      if (message.startsWith("/p2p_password|")) {
+        state.myP2PPassword = message.substring(14);
+        ui.myP2PCode.textContent = state.myP2PPassword || "-----";
+        return;
+      }
+      if (message.startsWith("/p2p_notification|")) {
+        const parts = message.split("|", 3);
+        if (parts.length === 3) {
+          ensureConversation(parts[1], parts[2]);
+          appendPrivateMessage(parts[1], "系统", "对方已向你发起私聊", false, true);
+          openPrivateChat(parts[1]);
+          showToast(parts[1] + " 已发起私聊", "info");
+        }
+        return;
+      }
+      if (message.startsWith("/p2p_verify_result|")) {
+        handleP2PVerifyResult(message);
+        return;
+      }
+      if (message.startsWith("/p2p_msg|")) {
+        const parts = message.split("|", 4);
+        if (parts.length === 4) {
+          ensureConversation(parts[1], parts[2]);
+          appendPrivateMessage(parts[1], parts[1], parts[3], false, false);
+          if (!ui.privateDialog.open || state.activePrivatePeer !== parts[1]) showToast(parts[1] + " 发来一条私聊消息", "info");
+        }
+        return;
+      }
+      if (message.startsWith("/p2p_error|")) {
+        showToast(message.substring(11), "error");
+        return;
+      }
+      if (message.startsWith("/live_group_joined|")) {
+        const parts = message.split("|", 3);
+        setGroupVoiceUi("active", (parts[2] || "1") + " 人");
+        startLiveAudio("GROUP", "");
+        return;
+      }
+      if (message === "/live_group_left") {
+        cleanupLiveAudio();
+        setGroupVoiceUi("idle", "未加入");
+        return;
+      }
+      if (message.startsWith("/live_group_disabled|")) {
+        cleanupLiveAudio();
+        setGroupVoiceUi("disabled", "已被服务器关闭");
+        return;
+      }
+      if (message.startsWith("/live_group_members|")) {
+        if (state.liveMode === "GROUP") setGroupVoiceUi("active", message.substring(20) + " 人");
+        return;
+      }
+      if (message.startsWith("/live_group_audio|")) {
+        const parts = message.split("|", 3);
+        if (parts.length === 3 && state.liveMode === "GROUP") enqueueLiveFrame(parts[2]);
+        return;
+      }
+      if (message.startsWith("/live_p2p_request|")) {
+        handleIncomingCall(message);
+        return;
+      }
+      if (message.startsWith("/live_p2p_request_sent|")) {
+        state.outgoingCallPeer = message.substring(23);
+        updatePrivateCallUi("等待对方接听");
+        return;
+      }
+      if (message.startsWith("/live_p2p_started|")) {
+        const parts = message.split("|", 3);
+        if (parts.length === 3) {
+          ensureConversation(parts[1], parts[2]);
+          state.outgoingCallPeer = "";
+          state.livePeer = parts[1];
+          openPrivateChat(parts[1]);
+          startLiveAudio("P2P", parts[1]);
+        }
+        return;
+      }
+      if (message.startsWith("/live_p2p_audio|")) {
+        const parts = message.split("|", 3);
+        if (parts.length === 3 && state.liveMode === "P2P" && parts[1] === state.livePeer) enqueueLiveFrame(parts[2]);
+        return;
+      }
+      if (message.startsWith("/live_p2p_ended|")) {
+        const peer = message.substring(16);
+        cleanupLiveAudio();
+        state.outgoingCallPeer = "";
+        updatePrivateCallUi(peer + " 已结束语音通话");
+        return;
+      }
+      if (message.startsWith("/live_p2p_rejected|") || message.startsWith("/live_p2p_rejected_ack|") || message.startsWith("/live_p2p_cancelled|")) {
+        const parts = message.split("|", 3);
+        state.outgoingCallPeer = "";
+        state.liveStarting = false;
+        const reason = parts[2] || (message.startsWith("/live_p2p_rejected_ack|") ? "已拒绝语音申请" : "语音申请已取消");
+        updatePrivateCallUi(reason);
+        showToast(reason, "info");
+        return;
+      }
+      if (message.startsWith("/live_voice_error|")) {
+        state.liveStarting = false;
+        state.outgoingCallPeer = "";
+        if (!state.liveMode) setGroupVoiceUi("idle", "未加入");
+        updatePrivateCallUi("语音未连接");
+        showToast(message.substring(18), "error");
+        return;
+      }
+      if (message.startsWith("/voice_with_sender|")) {
+        const parts = message.split("|", 4);
+        if (parts.length === 4) addVoiceMessage(parts[1], parts[2], parts[3], parts[1] === state.nickname);
+        return;
+      }
+      if (message.startsWith("/voice|")) {
+        const parts = message.split("|", 3);
+        if (parts.length === 3) addVoiceMessage("其他用户", parts[1], parts[2], false);
+        return;
+      }
+      if (message.startsWith("/image_info|")) {
+        handleImageInfo(message);
+        return;
+      }
+      if (message.startsWith("/image_chunk|")) {
+        handleImageChunk(message);
+        return;
+      }
+      if (message.startsWith("/deepseek_answer|")) {
+        appendMessage("DeepSeek", message.substring(17), false, "ai");
+        return;
+      }
+      if (message !== "/pong" && message !== "/ping") handleOrdinaryMessage(message);
+    }
+
+    function renderChannels() {
+      ui.channelSelect.replaceChildren();
+      if (!state.channels.length) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = state.channelsComplete ? "没有可用频道" : "正在读取频道...";
+        ui.channelSelect.appendChild(option);
+        ui.channelSelect.disabled = true;
+        ui.loginButton.disabled = true;
+        return;
+      }
+      state.channels.forEach((channel, index) => {
+        const option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = channel.name + (channel.requiresPassword ? "（需要密码）" : "");
+        ui.channelSelect.appendChild(option);
+      });
+      ui.channelSelect.disabled = false;
+      ui.loginButton.disabled = !state.channelsComplete;
+      updatePasswordVisibility();
+    }
+
+    function updatePasswordVisibility() {
+      const channel = state.channels[Number(ui.channelSelect.value)];
+      const required = Boolean(channel && channel.requiresPassword);
+      ui.channelPasswordField.hidden = !required;
+      ui.channelPasswordInput.required = required;
+      if (!required) ui.channelPasswordInput.value = "";
+    }
+
+    function beginLogin() {
+      const nickname = ui.nicknameInput.value.trim();
+      const channel = state.channels[Number(ui.channelSelect.value)];
+      ui.loginError.textContent = "";
+      if (!channel) return failLogin("请选择频道");
+      if (!nickname || !protocolSafe(nickname)) return failLogin("昵称不能包含竖线、换行或控制字符");
+      if (new TextEncoder().encode(nickname).length > 30) return failLogin("昵称不能超过 30 字节");
+      const password = ui.channelPasswordInput.value;
+      if (channel.requiresPassword && !password) return failLogin("请输入频道密码");
+      if (!protocolSafe(password)) return failLogin("频道密码包含不支持的字符");
+      state.nickname = nickname;
+      state.selectedChannel = channel;
+      state.loginPhase = "version";
+      ui.loginButton.disabled = true;
+      ui.channelSelect.disabled = true;
+      ui.nicknameInput.disabled = true;
+      ui.channelPasswordInput.disabled = true;
+      sendProtocol("/version|" + state.clientVersion);
+    }
+
+    function continueLoginAfterVersion() {
+      if (state.loginPhase !== "version" || !state.selectedChannel) return;
+      if (state.selectedChannel.group !== "group_public") {
+        state.loginPhase = "password";
+        sendProtocol("/login|" + state.selectedChannel.name + "|" + ui.channelPasswordInput.value);
+      } else {
+        sendSessionIdentity();
+      }
+    }
+
+    function sendSessionIdentity() {
+      if (!state.selectedChannel || state.loginPhase === "identity") return;
+      state.loginPhase = "identity";
+      sendProtocol("/group|" + state.selectedChannel.group);
+      sendProtocol("/nickname|" + state.nickname);
+    }
+
+    function failLogin(message) {
+      ui.loginError.textContent = message;
+      state.loginPhase = "idle";
+      ui.loginButton.disabled = !state.channelsComplete || !state.channels.length;
+      ui.channelSelect.disabled = !state.channels.length;
+      ui.nicknameInput.disabled = false;
+      ui.channelPasswordInput.disabled = false;
+    }
+
+    function enterChat() {
+      state.sessionReady = true;
+      state.lastMeaningfulActivity = Date.now();
+      ui.historyState.textContent = state.historyReceived ? "已同步" : "已连接";
+      ui.topNickname.textContent = state.nickname;
+      ui.topChannelName.textContent = state.selectedChannel.name;
+      ui.currentChannelName.textContent = state.selectedChannel.name;
+      showScreen("app");
+      ui.channelMessageInput.focus();
+      state.idleTimer = window.setInterval(() => {
+        if (Date.now() - state.lastMeaningfulActivity >= IDLE_LIMIT_MS) disconnect("已因一小时未发言而断开连接");
+      }, 60000);
+    }
+
+    function handleHistory(content) {
+      if (content === "start") {
+        state.historyReceiving = true;
+        state.historyReceived = true;
+        ui.historyState.textContent = "历史记录";
+        const marker = document.createElement("div");
+        marker.className = "history-separator";
+        marker.textContent = "历史消息";
+        ui.emptyMessages.hidden = true;
+        ui.messageFeed.appendChild(marker);
+      } else if (content === "end") {
+        state.historyReceiving = false;
+        ui.historyState.textContent = "已同步";
+      } else {
+        const parsed = parseChannelLine(content);
+        appendMessage(parsed.sender, parsed.text, parsed.sender === state.nickname, parsed.sender ? "channel" : "system", true);
+      }
+    }
+
+    function parseChannelLine(line) {
+      const match = /^\[([^\]]+)]\s?(.*)$/s.exec(line);
+      return match ? { sender: match[1], text: match[2] } : { sender: "", text: line };
+    }
+
+    function handleOrdinaryMessage(message) {
+      const parsed = parseChannelLine(message);
+      appendMessage(parsed.sender, parsed.text, parsed.sender === state.nickname, parsed.sender ? "channel" : "system");
+    }
+
+    function timeLabel() {
+      return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
+    }
+
+    function createMessageShell(sender, own, kind) {
+      const article = document.createElement("article");
+      article.className = "message" + (own ? " own" : "") + (kind === "system" ? " system" : "") + (kind === "ai" ? " ai" : "");
+      if (kind !== "system") {
+        const meta = document.createElement("div");
+        meta.className = "message-meta";
+        const who = document.createElement("strong");
+        who.textContent = sender || "系统";
+        const when = document.createElement("span");
+        when.textContent = timeLabel();
+        meta.append(who, when);
+        article.appendChild(meta);
+      }
+      const body = document.createElement("div");
+      body.className = "message-body";
+      article.appendChild(body);
+      return { article, body };
+    }
+
+    function appendMessage(sender, text, own = false, kind = "channel") {
+      ui.emptyMessages.hidden = true;
+      const shell = createMessageShell(sender, own, kind);
+      shell.body.textContent = text;
+      ui.messageFeed.appendChild(shell.article);
+      scrollToBottom(ui.messageFeed);
+    }
+
+    function scrollToBottom(element) {
+      window.requestAnimationFrame(() => { element.scrollTop = element.scrollHeight; });
+    }
+
+    function sendChannelMessage() {
+      const text = ui.channelMessageInput.value.replace(/[\r\n]+/g, " ").trim();
+      if (!text || !state.sessionReady) return;
+      if (new TextEncoder().encode(text).length > 300) {
+        showToast("消息不能超过 300 字节", "error");
+        return;
+      }
+      if (sendProtocol(text, true)) {
+        appendMessage(state.nickname, text, true);
+        ui.channelMessageInput.value = "";
+        autoSizeTextarea(ui.channelMessageInput);
+      }
+    }
+
+    function renderOnlineUsers() {
+      ui.onlineUsers.replaceChildren();
+      const users = Array.from(new Set(state.onlineUsers)).filter((name) => name && name !== state.nickname);
+      ui.onlineCount.textContent = String(users.length);
+      if (!users.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty-small";
+        empty.textContent = "暂无其他在线用户";
+        ui.onlineUsers.appendChild(empty);
+        if (state.selectedPeerName) selectPeer("");
+        return;
+      }
+      users.forEach((name) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "user-item" + (state.selectedPeerName === name ? " selected" : "");
+        const dot = document.createElement("span");
+        dot.className = "user-dot";
+        const label = document.createElement("span");
+        label.className = "user-label";
+        label.textContent = name;
+        button.append(dot, label);
+        button.addEventListener("click", () => selectPeer(name));
+        ui.onlineUsers.appendChild(button);
+      });
+    }
+
+    function selectPeer(name) {
+      state.selectedPeerName = name;
+      ui.selectedPeer.textContent = name ? "私聊对象：" + name : "请先选择在线用户";
+      ui.p2pConnectButton.disabled = !name;
+      renderOnlineUsers();
+      if (window.matchMedia("(max-width: 820px)").matches && name) switchMobilePanel("tools");
+    }
+
+    function requestP2PConnection() {
+      const password = ui.peerPasswordInput.value.trim();
+      if (!state.selectedPeerName) return showToast("请先选择在线用户", "error");
+      if (!/^\d{5}$/.test(password)) return showToast("请输入对方的 5 位数字私聊码", "error");
+      state.pendingP2PVerify = { name: state.selectedPeerName, password };
+      ui.p2pConnectButton.disabled = true;
+      sendProtocol("/p2p_verify|" + password, true);
+    }
+
+    function handleP2PVerifyResult(message) {
+      const parts = message.split("|", 3);
+      ui.p2pConnectButton.disabled = !state.selectedPeerName;
+      if (parts[1] === "success" && state.pendingP2PVerify) {
+        const pending = state.pendingP2PVerify;
+        ensureConversation(pending.name, pending.password);
+        appendPrivateMessage(pending.name, "系统", "私聊验证成功", false, true);
+        state.pendingP2PVerify = null;
+        ui.peerPasswordInput.value = "";
+        openPrivateChat(pending.name);
+      } else {
+        state.pendingP2PVerify = null;
+        showToast(parts[2] || "私聊验证失败", "error");
+      }
+    }
+
+    function ensureConversation(peer, password) {
+      let conversation = state.conversations.get(peer);
+      if (!conversation) {
+        conversation = { peer, password, messages: [] };
+        state.conversations.set(peer, conversation);
+      } else if (password) {
+        conversation.password = password;
+      }
+      return conversation;
+    }
+
+    function appendPrivateMessage(peer, sender, text, own, system) {
+      const conversation = ensureConversation(peer, "");
+      conversation.messages.push({ sender, text, own, system, time: timeLabel() });
+      if (state.activePrivatePeer === peer) renderPrivateMessages();
+    }
+
+    function openPrivateChat(peer) {
+      const conversation = state.conversations.get(peer);
+      if (!conversation) return;
+      state.activePrivatePeer = peer;
+      ui.privatePeerName.textContent = peer;
+      renderPrivateMessages();
+      updatePrivateCallUi();
+      if (!ui.privateDialog.open) ui.privateDialog.showModal();
+      ui.privateMessageInput.focus();
+    }
+
+    function renderPrivateMessages() {
+      ui.privateFeed.replaceChildren();
+      const conversation = state.conversations.get(state.activePrivatePeer);
+      if (!conversation || !conversation.messages.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty-state";
+        empty.textContent = "暂无私聊消息";
+        ui.privateFeed.appendChild(empty);
+        return;
+      }
+      conversation.messages.forEach((message) => {
+        const shell = createMessageShell(message.sender, message.own, message.system ? "system" : "channel");
+        shell.body.textContent = message.text;
+        ui.privateFeed.appendChild(shell.article);
+      });
+      scrollToBottom(ui.privateFeed);
+    }
+
+    function sendPrivateMessage() {
+      const text = ui.privateMessageInput.value.replace(/[\r\n]+/g, " ").trim();
+      const conversation = state.conversations.get(state.activePrivatePeer);
+      if (!text || !conversation) return;
+      if (new TextEncoder().encode(text).length > 300) return showToast("私聊消息不能超过 300 字节", "error");
+      if (sendProtocol("/p2p|" + conversation.password + "|" + text, true)) {
+        appendPrivateMessage(conversation.peer, state.nickname, text, true, false);
+        ui.privateMessageInput.value = "";
+      }
+    }
+
+    function requestPrivateVoice() {
+      const conversation = state.conversations.get(state.activePrivatePeer);
+      if (!conversation) return;
+      if (state.liveMode || state.liveStarting) return showToast("请先结束当前语音会话", "error");
+      state.liveStarting = true;
+      state.outgoingCallPeer = conversation.peer;
+      updatePrivateCallUi("正在申请语音通话");
+      sendProtocol("/live_p2p_request|" + conversation.password, true);
+    }
+
+    function handleIncomingCall(message) {
+      const parts = message.split("|", 3);
+      if (parts.length !== 3) return;
+      ensureConversation(parts[1], parts[2]);
+      state.incomingCall = { peer: parts[1], password: parts[2] };
+      ui.incomingCallText.textContent = parts[1] + " 请求与你进行实时语音通话";
+      if (!ui.incomingCallDialog.open) ui.incomingCallDialog.showModal();
+    }
+
+    function acceptIncomingCall() {
+      if (!state.incomingCall) return;
+      const call = state.incomingCall;
+      state.incomingCall = null;
+      state.liveStarting = true;
+      if (ui.incomingCallDialog.open) ui.incomingCallDialog.close();
+      openPrivateChat(call.peer);
+      updatePrivateCallUi("正在连接语音");
+      sendProtocol("/live_p2p_accept|" + call.password, true);
+    }
+
+    function rejectIncomingCall() {
+      if (!state.incomingCall) return;
+      const call = state.incomingCall;
+      state.incomingCall = null;
+      if (ui.incomingCallDialog.open) ui.incomingCallDialog.close();
+      sendProtocol("/live_p2p_reject|" + call.password, true);
+      appendPrivateMessage(call.peer, "系统", "已拒绝语音通话申请", false, true);
+    }
+
+    function hangupPrivateVoice() {
+      if (state.liveMode !== "P2P") return;
+      sendProtocol("/live_p2p_end", true);
+      cleanupLiveAudio();
+      updatePrivateCallUi("语音通话已结束");
+    }
+
+    function updatePrivateCallUi(statusText) {
+      const peer = state.activePrivatePeer;
+      const active = state.liveMode === "P2P" && state.livePeer === peer;
+      const pending = state.liveStarting && (state.outgoingCallPeer === peer || !state.outgoingCallPeer);
+      ui.privateCallButton.hidden = active;
+      ui.privateHangupButton.hidden = !active;
+      ui.privateCallButton.disabled = Boolean(state.liveMode || state.liveStarting);
+      if (statusText) ui.privateStatus.textContent = statusText;
+      else if (active) ui.privateStatus.textContent = "实时语音通话中";
+      else if (pending) ui.privateStatus.textContent = "正在等待语音连接";
+      else ui.privateStatus.textContent = "私聊已建立";
+    }
+
+    function toggleGroupVoice() {
+      if (state.liveMode === "GROUP") {
+        ui.groupVoiceButton.disabled = true;
+        setGroupVoiceUi("pending", "正在退出");
+        sendProtocol("/live_group_leave", true);
+        return;
+      }
+      if (state.liveMode || state.liveStarting) return showToast("请先结束当前私聊语音", "error");
+      state.liveStarting = true;
+      setGroupVoiceUi("pending", "正在加入");
+      sendProtocol("/live_group_join", true);
+    }
+
+    function setGroupVoiceUi(mode, text) {
+      ui.groupVoiceIndicator.className = "voice-indicator" + (mode === "active" ? " active" : mode === "pending" ? " pending" : "");
+      ui.groupVoiceStatus.textContent = text;
+      ui.groupVoiceButton.textContent = mode === "active" ? "退出频道语音" : "加入频道语音";
+      ui.groupVoiceButton.disabled = mode === "pending" || mode === "disabled";
+    }
+
+    async function startLiveAudio(mode, peer) {
+      if (state.live) return;
+      state.liveStarting = true;
+      const startToken = {};
+      state.liveStartToken = startToken;
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("浏览器只允许在 HTTPS 或 localhost 使用麦克风");
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+          video: false
+        });
+        if (state.liveStartToken !== startToken || !isOpen()) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) throw new Error("当前浏览器不支持实时音频");
+        const context = new AudioContextClass({ latencyHint: "interactive" });
+        await context.resume();
+        if (state.liveStartToken !== startToken || !isOpen()) {
+          stream.getTracks().forEach((track) => track.stop());
+          await context.close().catch(() => { });
+          return;
+        }
+        const live = {
+          stream, context, source: context.createMediaStreamSource(stream), captureNode: null, silentGain: null,
+          workletUrl: "", playbackQueue: [], playbackTimer: null, playbackStarted: false,
+          nextPlaybackAt: 0, scheduledSources: new Set(), resampleBuffer: new Float32Array(0),
+          resamplePosition: 0, frameSamples: [], sourceRate: context.sampleRate
+        };
+        state.live = live;
+        state.liveMode = mode;
+        state.livePeer = peer || "";
+        await attachLiveCapture(live);
+        if (state.liveStartToken !== startToken || !isOpen()) {
+          cleanupLiveAudio();
+          return;
+        }
+        live.playbackTimer = window.setInterval(pumpLivePlayback, 10);
+        state.liveStarting = false;
+        state.liveStartToken = null;
+        if (mode === "GROUP") setGroupVoiceUi("active", ui.groupVoiceStatus.textContent === "正在加入" ? "已加入" : ui.groupVoiceStatus.textContent);
+        updatePrivateCallUi();
+      } catch (error) {
+        const cancelled = state.liveStartToken !== startToken;
+        cleanupLiveAudio();
+        state.liveStarting = false;
+        state.liveStartToken = null;
+        if (cancelled) return;
+        if (mode === "GROUP") {
+          sendProtocol("/live_group_leave");
+          setGroupVoiceUi("idle", "麦克风不可用");
+        } else {
+          sendProtocol("/live_p2p_end");
+          updatePrivateCallUi("麦克风不可用");
+        }
+        showToast(error && error.message ? error.message : "无法使用麦克风", "error", 6500);
+      }
+    }
+
+    async function attachLiveCapture(live) {
+      live.silentGain = live.context.createGain();
+      live.silentGain.gain.value = 0;
+      live.silentGain.connect(live.context.destination);
+      if (live.context.audioWorklet && window.AudioWorkletNode) {
+        const source = "class PCMInputProcessor extends AudioWorkletProcessor { constructor() { super(); this.parts = []; this.length = 0; } process(inputs) { const input = inputs[0] && inputs[0][0]; if (!input) return true; this.parts.push(input.slice()); this.length += input.length; if (this.length >= 1024) { const merged = new Float32Array(this.length); let offset = 0; for (const part of this.parts) { merged.set(part, offset); offset += part.length; } this.port.postMessage(merged, [merged.buffer]); this.parts = []; this.length = 0; } return true; } } registerProcessor('pcm-input', PCMInputProcessor);";
+        live.workletUrl = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+        await live.context.audioWorklet.addModule(live.workletUrl);
+        live.captureNode = new AudioWorkletNode(live.context, "pcm-input", { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+        live.captureNode.port.onmessage = (event) => feedLiveSamples(event.data);
+      } else {
+        live.captureNode = live.context.createScriptProcessor(2048, 1, 1);
+        live.captureNode.onaudioprocess = (event) => feedLiveSamples(new Float32Array(event.inputBuffer.getChannelData(0)));
+      }
+      live.source.connect(live.captureNode);
+      live.captureNode.connect(live.silentGain);
+    }
+
+    function feedLiveSamples(samples) {
+      const live = state.live;
+      if (!live || !samples || !samples.length) return;
+      const merged = new Float32Array(live.resampleBuffer.length + samples.length);
+      merged.set(live.resampleBuffer);
+      merged.set(samples, live.resampleBuffer.length);
+      const step = live.sourceRate / LIVE_SAMPLE_RATE;
+      let position = live.resamplePosition;
+      let energy = 0;
+      let energyCount = 0;
+      while (position + 1 < merged.length) {
+        const index = Math.floor(position);
+        const fraction = position - index;
+        const sample = merged[index] + (merged[index + 1] - merged[index]) * fraction;
+        live.frameSamples.push(sample);
+        energy += sample * sample;
+        energyCount++;
+        position += step;
+      }
+      const consumed = Math.min(Math.floor(position), Math.max(0, merged.length - 1));
+      live.resampleBuffer = merged.slice(consumed);
+      live.resamplePosition = position - consumed;
+      if (energyCount && Math.sqrt(energy / energyCount) > .025) state.lastMeaningfulActivity = Date.now();
+      while (live.frameSamples.length >= LIVE_FRAME_SAMPLES) {
+        const frame = floatSamplesToPcm(live.frameSamples.splice(0, LIVE_FRAME_SAMPLES));
+        const command = state.liveMode === "GROUP" ? "/live_group_audio|" : "/live_p2p_audio|";
+        sendProtocol(command + bytesToBase64(frame));
+      }
+    }
+
+    function floatSamplesToPcm(samples) {
+      const bytes = new Uint8Array(samples.length * 2);
+      const view = new DataView(bytes.buffer);
+      for (let i = 0; i < samples.length; i++) {
+        const value = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(i * 2, value < 0 ? value * 32768 : value * 32767, true);
+      }
+      return bytes;
+    }
+
+    function enqueueLiveFrame(encoded) {
+      const live = state.live;
+      if (!live) return;
+      const bytes = base64ToBytes(encoded);
+      if (!bytes || bytes.length !== LIVE_FRAME_BYTES) return;
+      if (live.playbackQueue.length >= 15) live.playbackQueue.splice(0, live.playbackQueue.length - 8);
+      live.playbackQueue.push(bytes);
+    }
+
+    function pumpLivePlayback() {
+      const live = state.live;
+      if (!live || live.context.state === "closed") return;
+      const now = live.context.currentTime;
+      if (!live.playbackStarted) {
+        if (live.playbackQueue.length < 4) return;
+        live.playbackStarted = true;
+        live.nextPlaybackAt = now + .08;
+      }
+      if (live.nextPlaybackAt < now + .015) {
+        if (!live.playbackQueue.length) {
+          live.playbackStarted = false;
+          return;
+        }
+        live.nextPlaybackAt = now + .06;
+      }
+      while (live.playbackQueue.length && live.nextPlaybackAt < now + .18) {
+        const bytes = live.playbackQueue.shift();
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const buffer = live.context.createBuffer(1, LIVE_FRAME_SAMPLES, LIVE_SAMPLE_RATE);
+        const channel = buffer.getChannelData(0);
+        for (let i = 0; i < LIVE_FRAME_SAMPLES; i++) channel[i] = view.getInt16(i * 2, true) / 32768;
+        const source = live.context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(live.context.destination);
+        live.scheduledSources.add(source);
+        source.onended = () => live.scheduledSources.delete(source);
+        source.start(live.nextPlaybackAt);
+        live.nextPlaybackAt += LIVE_FRAME_SAMPLES / LIVE_SAMPLE_RATE;
+      }
+    }
+
+    function cleanupLiveAudio() {
+      const live = state.live;
+      state.live = null;
+      state.liveMode = null;
+      state.livePeer = "";
+      state.liveStarting = false;
+      state.liveStartToken = null;
+      if (!live) return;
+      if (live.playbackTimer) window.clearInterval(live.playbackTimer);
+      live.scheduledSources.forEach((source) => { try { source.stop(); } catch (_) { } });
+      try { if (live.source) live.source.disconnect(); } catch (_) { }
+      try { if (live.captureNode) live.captureNode.disconnect(); } catch (_) { }
+      try { if (live.silentGain) live.silentGain.disconnect(); } catch (_) { }
+      live.stream.getTracks().forEach((track) => track.stop());
+      if (live.context && live.context.state !== "closed") live.context.close().catch(() => { });
+      if (live.workletUrl) URL.revokeObjectURL(live.workletUrl);
+      setGroupVoiceUi("idle", "未加入");
+      updatePrivateCallUi();
+    }
+
+    async function toggleVoiceNote() {
+      if (state.note) {
+        await stopVoiceNote(true);
+        return;
+      }
+      if (state.liveMode || state.liveStarting) return showToast("实时语音期间不能录制语音留言", "error");
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("浏览器只允许在 HTTPS 或 localhost 使用麦克风");
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+          video: false
+        });
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        const context = new AudioContextClass();
+        await context.resume();
+        const source = context.createMediaStreamSource(stream);
+        const processor = context.createScriptProcessor(2048, 1, 1);
+        const silent = context.createGain();
+        silent.gain.value = 0;
+        const note = { stream, context, source, processor, silent, chunks: [], startedAt: Date.now(), timer: null, stopping: false };
+        state.note = note;
+        processor.onaudioprocess = (event) => note.chunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+        source.connect(processor);
+        processor.connect(silent);
+        silent.connect(context.destination);
+        ui.voiceNoteButton.classList.add("recording");
+        ui.voiceNoteButton.title = "停止并发送语音留言";
+        note.timer = window.setInterval(() => {
+          const seconds = Math.min(8, Math.floor((Date.now() - note.startedAt) / 1000));
+          ui.composerStatus.textContent = "正在录音 " + seconds + " / 8 秒";
+          if (seconds >= 8) stopVoiceNote(true);
+        }, 250);
+      } catch (error) {
+        showToast(error && error.message ? error.message : "无法使用麦克风", "error", 6500);
+      }
+    }
+
+    async function stopVoiceNote(send) {
+      const note = state.note;
+      if (!note || note.stopping) return;
+      note.stopping = true;
+      state.note = null;
+      if (note.timer) window.clearInterval(note.timer);
+      ui.voiceNoteButton.classList.remove("recording");
+      ui.voiceNoteButton.title = "录制语音留言";
+      ui.composerStatus.textContent = "";
+      try { note.source.disconnect(); } catch (_) { }
+      try { note.processor.disconnect(); } catch (_) { }
+      try { note.silent.disconnect(); } catch (_) { }
+      note.stream.getTracks().forEach((track) => track.stop());
+      const inputRate = note.context.sampleRate;
+      if (note.context.state !== "closed") await note.context.close().catch(() => { });
+      if (!send || !note.chunks.length || Date.now() - note.startedAt < 250) return;
+      const samples = mergeFloatChunks(note.chunks);
+      const downsampled = downsampleAudio(samples, inputRate, LIVE_SAMPLE_RATE);
+      const wav = encodeWav(downsampled, LIVE_SAMPLE_RATE);
+      const id = "voice_" + Date.now() + "_web";
+      if (sendProtocol("/voice|" + id + "|" + bytesToBase64(wav), true)) {
+        appendVoiceElement(state.nickname, id, wav, true);
+        showToast("语音留言已发送", "success");
+      }
+    }
+
+    function mergeFloatChunks(chunks) {
+      const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+      const result = new Float32Array(length);
+      let offset = 0;
+      chunks.forEach((chunk) => { result.set(chunk, offset); offset += chunk.length; });
+      return result;
+    }
+
+    function downsampleAudio(input, inputRate, outputRate) {
+      if (inputRate === outputRate) return input;
+      const ratio = inputRate / outputRate;
+      const output = new Float32Array(Math.floor(input.length / ratio));
+      for (let i = 0; i < output.length; i++) {
+        const start = Math.floor(i * ratio);
+        const end = Math.max(start + 1, Math.min(input.length, Math.floor((i + 1) * ratio)));
+        let sum = 0;
+        for (let j = start; j < end; j++) sum += input[j];
+        output[i] = sum / (end - start);
+      }
+      return output;
+    }
+
+    function encodeWav(samples, sampleRate) {
+      const bytes = new Uint8Array(44 + samples.length * 2);
+      const view = new DataView(bytes.buffer);
+      const writeText = (offset, text) => { for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i)); };
+      writeText(0, "RIFF");
+      view.setUint32(4, 36 + samples.length * 2, true);
+      writeText(8, "WAVE");
+      writeText(12, "fmt ");
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeText(36, "data");
+      view.setUint32(40, samples.length * 2, true);
+      for (let i = 0; i < samples.length; i++) {
+        const value = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(44 + i * 2, value < 0 ? value * 32768 : value * 32767, true);
+      }
+      return bytes;
+    }
+
+    function rawPcmToWav(bytes) {
+      const samples = new Float32Array(Math.floor(bytes.length / 2));
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      for (let i = 0; i < samples.length; i++) samples[i] = view.getInt16(i * 2, true) / 32768;
+      return encodeWav(samples, LIVE_SAMPLE_RATE);
+    }
+
+    function addVoiceMessage(sender, id, encoded, own) {
+      const bytes = base64ToBytes(encoded);
+      if (!bytes || !bytes.length) return;
+      const isWav = bytes.length >= 12 && String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" && String.fromCharCode(...bytes.subarray(8, 12)) === "WAVE";
+      appendVoiceElement(sender, id, isWav ? bytes : rawPcmToWav(bytes), own);
+    }
+
+    function appendVoiceElement(sender, id, wav, own) {
+      ui.emptyMessages.hidden = true;
+      const shell = createMessageShell(sender, own, "channel");
+      const audio = document.createElement("audio");
+      audio.controls = true;
+      audio.preload = "metadata";
+      audio.setAttribute("aria-label", "语音留言 " + id);
+      const url = URL.createObjectURL(new Blob([wav], { type: "audio/wav" }));
+      state.objectUrls.add(url);
+      audio.src = url;
+      shell.body.appendChild(audio);
+      ui.messageFeed.appendChild(shell.article);
+      scrollToBottom(ui.messageFeed);
+    }
+
+    async function sendSelectedImage(file) {
+      if (!file) return;
+      if (!file.type.startsWith("image/")) return showToast("请选择图片文件", "error");
+      if (file.size > MAX_IMAGE_BYTES) return showToast("图片不能超过 20MB", "error");
+      ui.imageButton.disabled = true;
+      ui.composerStatus.textContent = "正在发送图片";
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const encoded = bytesToBase64(bytes);
+        const total = Math.ceil(encoded.length / IMAGE_CHUNK_SIZE);
+        const id = "img_" + Date.now() + "_web";
+        const safeName = file.name.replace(/[|\r\n]/g, "_") || "image";
+        sendProtocol("/image_info|" + id + "|" + total + "|" + safeName, true);
+        for (let i = 0; i < total; i++) {
+          await waitForWebSocketBuffer();
+          sendProtocol("/image_chunk|" + id + "|" + i + "|" + encoded.slice(i * IMAGE_CHUNK_SIZE, (i + 1) * IMAGE_CHUNK_SIZE));
+        }
+        appendImageElement(state.nickname, safeName, bytes, file.type, true);
+        showToast("图片已发送", "success");
+      } catch (_) {
+        showToast("图片发送失败", "error");
+      } finally {
+        ui.imageInput.value = "";
+        ui.imageButton.disabled = false;
+        ui.composerStatus.textContent = "";
+      }
+    }
+
+    function waitForWebSocketBuffer() {
+      return new Promise((resolve, reject) => {
+        const check = () => {
+          if (!isOpen()) return reject(new Error("socket closed"));
+          if (state.socket.bufferedAmount < 512000) resolve();
+          else window.setTimeout(check, 20);
+        };
+        check();
+      });
+    }
+
+    function handleImageInfo(message) {
+      const parts = message.split("|", 4);
+      const total = Number(parts[2]);
+      if (parts.length !== 4 || !Number.isInteger(total) || total < 1 || total > 1000) return;
+      state.imageReceivers.set(parts[1], { filename: parts[3], total, chunks: new Array(total), received: 0 });
+      appendMessage("系统", "正在接收图片：" + parts[3], false, "system");
+    }
+
+    function handleImageChunk(message) {
+      const parts = message.split("|", 4);
+      if (parts.length !== 4) return;
+      const receiver = state.imageReceivers.get(parts[1]);
+      const index = Number(parts[2]);
+      if (!receiver || !Number.isInteger(index) || index < 0 || index >= receiver.total || receiver.chunks[index] !== undefined) return;
+      receiver.chunks[index] = parts[3];
+      receiver.received++;
+      if (receiver.received !== receiver.total) return;
+      state.imageReceivers.delete(parts[1]);
+      const bytes = base64ToBytes(receiver.chunks.join(""));
+      if (!bytes) return showToast("收到的图片数据无效", "error");
+      appendImageElement("频道用户", receiver.filename, bytes, mimeFromFilename(receiver.filename), false);
+    }
+
+    function mimeFromFilename(filename) {
+      const extension = (filename.split(".").pop() || "").toLowerCase();
+      return ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp" })[extension] || "application/octet-stream";
+    }
+
+    function appendImageElement(sender, filename, bytes, mime, own) {
+      ui.emptyMessages.hidden = true;
+      const shell = createMessageShell(sender, own, "channel");
+      const image = document.createElement("img");
+      const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+      state.objectUrls.add(url);
+      image.src = url;
+      image.alt = filename;
+      image.loading = "lazy";
+      shell.body.appendChild(image);
+      ui.messageFeed.appendChild(shell.article);
+      scrollToBottom(ui.messageFeed);
+    }
+
+    function askDeepSeek() {
+      const question = ui.deepSeekInput.value.replace(/[\r\n]+/g, " ").trim();
+      if (!question) return;
+      if (new TextEncoder().encode(question).length > 300) return showToast("问题不能超过 300 字节", "error");
+      sendProtocol("/deepseek|" + question, true);
+      appendMessage(state.nickname, question, true, "channel");
+      ui.deepSeekInput.value = "";
+      showToast("问题已发送", "success");
+    }
+
+    function autoSizeTextarea(textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = Math.min(textarea.scrollHeight, 116) + "px";
+    }
+
+    function switchMobilePanel(panel) {
+      ui.workspace.dataset.mobilePanel = panel;
+      document.querySelectorAll(".mobile-tabs button").forEach((button) => button.classList.toggle("active", button.dataset.panel === panel));
+    }
+
+    ui.verifyForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const answer = ui.verifyAnswer.value.trim();
+      if (!answer) return;
+      ui.verifyButton.disabled = true;
+      ui.verifyError.textContent = "";
+      sendProtocol("/web_verify|" + encodeBase64Utf8(answer));
+    });
+    ui.reconnectButton.addEventListener("click", connectWebSocket);
+    ui.channelSelect.addEventListener("change", updatePasswordVisibility);
+    ui.loginForm.addEventListener("submit", (event) => { event.preventDefault(); beginLogin(); });
+    ui.disconnectButton.addEventListener("click", () => disconnect("已主动断开连接"));
+    ui.channelMessageForm.addEventListener("submit", (event) => { event.preventDefault(); sendChannelMessage(); });
+    ui.channelMessageInput.addEventListener("input", () => autoSizeTextarea(ui.channelMessageInput));
+    ui.channelMessageInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendChannelMessage(); }
+    });
+    ui.imageButton.addEventListener("click", () => ui.imageInput.click());
+    ui.imageInput.addEventListener("change", () => sendSelectedImage(ui.imageInput.files[0]));
+    ui.voiceNoteButton.addEventListener("click", toggleVoiceNote);
+    ui.groupVoiceButton.addEventListener("click", toggleGroupVoice);
+    ui.p2pConnectForm.addEventListener("submit", (event) => { event.preventDefault(); requestP2PConnection(); });
+    ui.deepSeekForm.addEventListener("submit", (event) => { event.preventDefault(); askDeepSeek(); });
+    ui.privateMessageForm.addEventListener("submit", (event) => { event.preventDefault(); sendPrivateMessage(); });
+    ui.privateCallButton.addEventListener("click", requestPrivateVoice);
+    ui.privateHangupButton.addEventListener("click", hangupPrivateVoice);
+    ui.privateCloseButton.addEventListener("click", () => ui.privateDialog.close());
+    ui.acceptCallButton.addEventListener("click", acceptIncomingCall);
+    ui.rejectCallButton.addEventListener("click", rejectIncomingCall);
+    ui.incomingCallDialog.addEventListener("cancel", (event) => { event.preventDefault(); rejectIncomingCall(); });
+    document.querySelectorAll(".mobile-tabs button").forEach((button) => button.addEventListener("click", () => switchMobilePanel(button.dataset.panel)));
+
+    window.addEventListener("beforeunload", () => {
+      if (isOpen()) {
+        try { state.socket.send("/web_disconnect"); } catch (_) { }
+        state.socket.close();
+      }
+      state.objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    });
+
+    connectWebSocket();
+  </script>
+</body>
+</html>
